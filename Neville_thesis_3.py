@@ -14,11 +14,14 @@ Then i just need to restart the kernel (ctrl + .)since i run this in Spyder.
 Interestingly enough eta1 leads to a horizontal smearing, eta2 leads to a smearing along 
 the diagonal, and eta3 leads to a vertical smearing
 
-Added enough polish to program, i'd say it is ready enough to show and impress.'
+Added enough polish to program, i'd say it is ready enough to show and impress.
+
+Also bypassed difficulties with backend issue by just hashing out import matplotlib and 
+matplotlib.use(TkAgg)
 """
 
-import matplotlib
-matplotlib.use('TkAgg')
+#import matplotlib
+#matplotlib.use('TkAgg')
 
 from tkinter import *
 from tkinter.ttk import *
