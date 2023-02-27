@@ -70,9 +70,9 @@ def Fidelity(Unitary):
 
 def DensityMatrix(Unitary):
     p_top=abs(top_bra@Unitary@top_ket)**2
-    print(p_top)
+    #print(p_top)
     p_bottom=abs(bottom_bra@Unitary@top_ket)**2
-    print(p_bottom)
+    #print(p_bottom)
     #print(p_top+p_bottom)
     rho=p_top*(Unitary@top_ket@top_bra@Unitary.conj().T)+p_bottom*(Unitary@bottom_ket@top_bra@Unitary.conj().T)
     return rho
@@ -100,11 +100,11 @@ test_U2=construct_BS(eta3_flaw)@construct_PS(np.pi)@construct_BS(eta2_flaw)@cons
 x=DensityMatrix(test_U1)
 y=DensityMatrix(test_U2)
 fid=np.trace(sqrtm(sqrtm(x)@y@sqrtm(x)))
-print(x)
-print(y)
-print(fid)
+#print(x)
+#print(y)
+#print(fid)
 
-"""
+
 for i in range(len(phi1)):
     for j in range(len(phi2)):
         unitary_toy1=construct_BS(eta3)@construct_PS(phi2[j])@construct_BS(eta2)@construct_PS(phi1[i])@construct_BS(eta1)
@@ -119,8 +119,8 @@ for i in range(len(phi1)):
 
 #print(results)
 fig,ax=plt.subplots()
-#im = ax.imshow(results, cmap='turbo', interpolation='nearest', extent=[0,2*np.pi,0,2*np.pi])
-im = ax.imshow(trace_dist, cmap='turbo', interpolation='nearest', extent=[0,2*np.pi,0,2*np.pi])
+im = ax.imshow(results, cmap='turbo', interpolation='nearest', extent=[0,2*np.pi,0,2*np.pi])
+#im = ax.imshow(trace_dist, cmap='turbo', interpolation='nearest', extent=[0,2*np.pi,0,2*np.pi])
 fig.colorbar(im, ax=ax)
 #Show all ticks and label them with the respective list entries
 #ax.set_xticks(np.arange(len(phi2)))
@@ -131,7 +131,7 @@ fig.colorbar(im, ax=ax)
 plt.xlabel(r'$\phi_1$')
 plt.ylabel(r'$\phi_2$')
 plt.show()
-"""
+
 """
 Not seeming to be able to replicate the fig 4.3b plot.
 """
