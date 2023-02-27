@@ -46,6 +46,7 @@ for i in range(len(phi1)):
         results[i][j]=abs(b@unitary_toy@a)**2
         
 #print(results)
+#results=results.T
 fig,ax=plt.subplots()
 im = ax.imshow(results, cmap='turbo', interpolation='nearest', extent=[0,2*np.pi,0,2*np.pi])
 fig.colorbar(im, ax=ax)
