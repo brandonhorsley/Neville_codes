@@ -6,6 +6,8 @@ Patrick identified what i was doing wrong but i still don't have the plot so now
 
 Defining trace distance gives a plot that is closer to the desired plot so it could be how
 i am defining fidelity is the issue
+
+Successfully replicated plot
 """
 
 import matplotlib
@@ -69,12 +71,13 @@ def Fidelity(Unitary):
 """
 
 def DensityMatrix(Unitary):
-    p_top=abs(top_bra@Unitary@top_ket)**2
+    #=abs(top_bra@Unitary@top_ket)**2
     #print(p_top)
-    p_bottom=abs(bottom_bra@Unitary@top_ket)**2
+    #p_bottom=abs(bottom_bra@Unitary@top_ket)**2
     #print(p_bottom)
     #print(p_top+p_bottom)
-    rho=p_top*(Unitary@top_ket@top_bra@Unitary.conj().T)+p_bottom*(Unitary@bottom_ket@top_bra@Unitary.conj().T)
+    #rho=p_top*(Unitary@top_ket@top_bra@Unitary.conj().T)+p_bottom*(Unitary@bottom_ket@top_bra@Unitary.conj().T)
+    rho=Unitary@top_ket@top_bra@Unitary.conj().T
     return rho
 
 
@@ -112,7 +115,7 @@ for i in range(len(phi1)):
         rho1=DensityMatrix(unitary_toy1)
         rho2=DensityMatrix(unitary_toy2)
         trace_dist[i][j]=0.5*np.trace(sqrtm((rho1-rho2).conj().T@(rho1-rho2)))
-        results[i][j]=np.trace(sqrtm(sqrtm(rho1)@rho2@sqrtm(rho1)))
+        results[i][j]=(np.trace(sqrtm(sqrtm(rho1)@rho2@sqrtm(rho1))))**2
         #results[i][j]=np.trace(sqrtm(sqrtm(rho2)@rho1@sqrtm(rho2)))
         #results[i][j]=abs(top_bra@unitary_toy.conj().T@top_ket)**2
         
