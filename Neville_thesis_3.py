@@ -4,20 +4,8 @@ eta values get changed independently. A really sophisticated way to do this coul
 something like Tkinter and having sliders for each eta value and then the plot gets updated.
 If the value gets changed.
 
-I have started by copying a Tkinter program that makes use of a scale as a starting point to work 
-from, did have to work through some errors from deprecation but it is working now.
-
-Made it work properly, Just adding polish, also note that if i get:
-    ImportError: Cannot load backend 'TkAgg' which requires the 'tk' interactive framework, as 'qt5' is currently running
-Then i just need to restart the kernel (ctrl + .)since i run this in Spyder.
-
 Interestingly enough eta1 leads to a horizontal smearing, eta2 leads to a smearing along 
-the diagonal, and eta3 leads to a vertical smearing
-
-Added enough polish to program, i'd say it is ready enough to show and impress.
-
-Also bypassed difficulties with backend issue by just hashing out import matplotlib and 
-matplotlib.use(TkAgg)
+the diagonal, and eta3 leads to a vertical smearing.
 """
 
 #import matplotlib
@@ -43,23 +31,15 @@ def construct_BS(eta):
 
 def Calculation(phi1,phi2,eta1,eta2,eta3):
     results=np.empty((len(phi1),len(phi2)))
-    #a=np.array([0,1])
     a=np.array([1,0])
     a.shape=(2,1)
 
-    #b=np.array([0,1])
     b=np.array([1,0])
     b.shape=(1,2)
-
-    #test_U=construct_BS(eta3)@construct_PS(np.pi/2)@construct_BS(eta2)@construct_PS(np.pi/2)@construct_BS(eta1)
-    #print(test_U)
 
     for i in range(len(phi1)):
         for j in range(len(phi2)):
             unitary_toy=construct_BS(eta3)@construct_PS(phi2[j])@construct_BS(eta2)@construct_PS(phi1[i])@construct_BS(eta1)
-            #print(np.shape(a))
-            #print(np.shape(b))
-            #print(np.shape(unitary_toy))
             results[i][j]=abs(b@unitary_toy@a)**2
     return results
 
@@ -88,14 +68,13 @@ def mOpen():
    eta2.set(0.5)
    eta3.set(0.5)
    
-   #slider_1 = Scale(mGui,orient=HORIZONTAL,length = 100,from_=0,to=9, variable=var, command=updateScale)
    slider_1 = Scale(mGui,orient=HORIZONTAL,length = 100,from_=0,to=1, variable=eta1, command=ChangeEta1)
    slider_1.place(x = 700,y=100)
    slider_2 = Scale(mGui,orient=HORIZONTAL,length = 100,from_=0,to=1, variable=eta2, command=ChangeEta2)
    slider_2.place(x = 700,y=200)
    slider_3 = Scale(mGui,orient=HORIZONTAL,length = 100,from_=0,to=1, variable=eta3, command=ChangeEta3)
    slider_3.place(x = 700,y=300)
-   #t = np.random.random_sample(100000).reshape(100,100,10)
+
    l1=Label(text=r"$\eta_1$")
    l1.place(x = 600,y=100)
    l1=Label(text=r"$\eta_2$")
@@ -181,37 +160,5 @@ mGui.title('Plot')
 mGui.mainloop()
 
 """
-import tkinter as tk
-
-# --- functions ---
-
-def generate():
-    try:
-        result = float(num1.get()) + float(num2.get())
-    except Exception as ex:
-        print(ex)
-        result = 'error'
-
-    num3.set(result)
-
-# --- main ---
-
-root = tk.Tk()
-
-num1 = tk.StringVar()
-num2 = tk.StringVar()
-num3 = tk.StringVar()
-
-tk.Label(root, text="Number 1:").grid(row=0, column=0)
-tk.Label(root, text="Number 2:").grid(row=1, column=0)
-tk.Label(root, text="Result:").grid(row=2, column=0)
-
-tk.Entry(root, textvariable=num1).grid(row=0, column=1)
-tk.Entry(root, textvariable=num2).grid(row=1, column=1)
-tk.Entry(root, textvariable=num3).grid(row=2, column=1)
-
-button = tk.Button(root, text="Calculate", command=generate)
-button.grid(row=3, column=1)
-
-root.mainloop()
+Program made to a satisfactory standard.
 """
