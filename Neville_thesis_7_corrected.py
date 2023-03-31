@@ -1,11 +1,14 @@
-"""
-Code for replicating fig 4.6 in Alex Neville thesis.
-"""
-
 #Import modules
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
+import time
+from decimal import Decimal, getcontext
+
+# Set the desired precision (e.g. 50 decimal places)
+getcontext().prec = int(800)
+
+#print(np.finfo(np.longdouble).eps)
 
 a1_true=0 #true value mentioned in figure caption
 a2_true=0 #true value mentioned in figure caption
@@ -16,6 +19,8 @@ b2=0.711
 eta1=0.447
 eta2=0.548
 eta3=0.479
+
+#print(np.float96(3))
 
 #For reproducibility
 np.random.seed(0)
@@ -47,7 +52,7 @@ def ConstructU(eta1,eta2,eta3,phi1,phi2):
     return U
 
 Voltages=np.random.uniform(low=0, high=10,size=20) #random voltage between 1 and 5
-#Get inf in certain situations, for 10 or larger size, need machine precision stuff
+#Get inf in certain situations, need machine precision stuff
 #print(Voltages)
 
 m=2 #number of modes in interferometer
@@ -80,6 +85,7 @@ results=np.empty((len(a1),len(a2)))
 
 for i in range(len(a1)):
     for j in range(len(a2)):
+        #res=np.zeros(len(Voltages),dtype=np.longdouble)
         res=[]
         for k in range(len(Voltages)):
             phi1=(a1[i]+b1*Voltages[k]**2)%(2*np.pi) #phi=a+bV**2
@@ -91,12 +97,20 @@ for i in range(len(a1)):
             P_click2=P_click2[0][0]
             P=[P_click1,P_click2]
             #n=C,p=P,x=array of clicks
-            prob=scipy.stats.multinomial.pmf(x=data[k],n=C[k],p=P)
-            #print(prob)
+            prob=Decimal(scipy.stats.multinomial.pmf(x=data[k],n=C[k],p=P))
+            print(prob)
+            #time.sleep(1)
+            #print(res)
+            #res[k]=prob
             res.append(prob)
         #print(res)
         #results[i][j]=np.prod(res)
+        #print(np.finfo(np.log(np.prod(res))).eps)
         results[i][j]=np.log(np.prod(res))
+        #print(results[i][j])
+        #print(np.prod(res))
+
+#print(results)
         
 fig,ax=plt.subplots()
 im = ax.imshow(results, cmap='turbo', interpolation='nearest', extent=[-np.pi,np.pi,-np.pi,np.pi])
