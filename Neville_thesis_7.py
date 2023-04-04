@@ -1,5 +1,8 @@
 """
 Code for replicating fig 4.6 in Alex Neville thesis.
+
+Plot doesn't fully match the thesis figure but it is my assumption that it 
+is due to the choice of voltage sampling.
 """
 
 #Import modules
@@ -46,9 +49,7 @@ def ConstructU(eta1,eta2,eta3,phi1,phi2):
     U=construct_BS(eta3)@construct_PS(phi2)@construct_BS(eta2)@construct_PS(phi1)@construct_BS(eta1)
     return U
 
-Voltages=np.random.uniform(low=0, high=10,size=20) #random voltage between 1 and 5
-#Get inf in certain situations, for 10 or larger size, need machine precision stuff
-#print(Voltages)
+Voltages=np.random.uniform(low=0, high=10,size=100) #random voltage between 1 and 5
 
 m=2 #number of modes in interferometer
 
@@ -58,11 +59,10 @@ a2=np.linspace(-np.pi,np.pi,100)
 data=np.empty((len(Voltages),2))
 C=np.empty((len(Voltages)))
 
-#voltage=2.5
 for i in range(len(Voltages)):
     #Input into mth mode of beamsplitter
-    phi1_true=(b1*Voltages[i]**2)%(2*np.pi) #phi=a+bV**2
-    phi2_true=(b2*Voltages[i]**2)%(2*np.pi) #phi=a+bV**2
+    phi1_true=b1*Voltages[i]**2 #phi=a+bV**2
+    phi2_true=b2*Voltages[i]**2 #phi=a+bV**2
     U=ConstructU(eta1,eta2,eta3,phi1_true,phi2_true) #Generate double MZI Unitary
     P_click1_true=abs(top_bra@U@bottom_ket)**2 #Probability of click in top
     P_click1_true=P_click1_true[0][0]
@@ -73,17 +73,14 @@ for i in range(len(Voltages)):
     data[i]=scipy.stats.multinomial.rvs(n=50,p=P_true)
     C[i]=np.sum(data[i])
 
-#print(data)
-#print(C)
-
 results=np.empty((len(a1),len(a2)))
 
 for i in range(len(a1)):
     for j in range(len(a2)):
         res=[]
         for k in range(len(Voltages)):
-            phi1=(a1[i]+b1*Voltages[k]**2)%(2*np.pi) #phi=a+bV**2
-            phi2=(a2[j]+b2*Voltages[k]**2)%(2*np.pi) #phi=a+bV**2
+            phi1=a1[i]+b1*Voltages[k]**2 #phi=a+bV**2
+            phi2=a2[j]+b2*Voltages[k]**2 #phi=a+bV**2
             U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
             P_click1=abs(top_bra@U@top_ket)**2 #Probability of click in top
             P_click1=P_click1[0][0]
@@ -92,15 +89,11 @@ for i in range(len(a1)):
             P=[P_click1,P_click2]
             #n=C,p=P,x=array of clicks
             prob=scipy.stats.multinomial.pmf(x=data[k],n=C[k],p=P)
-            #print(prob)
-            res.append(prob)
-        #print(res)
-        #results[i][j]=np.prod(res)
-        results[i][j]=np.log(np.prod(res))
+            res.append(np.log(prob))
+        results[i][j]=np.sum(res)
         
 fig,ax=plt.subplots()
 im = ax.imshow(results, cmap='turbo', interpolation='nearest', extent=[-np.pi,np.pi,-np.pi,np.pi])
-#im = ax.imshow(results, cmap='turbo', interpolation='nearest', extent=[-np.pi,np.pi,-np.pi,np.pi])
 fig.colorbar(im, ax=ax)
 plt.xlabel('a1')
 plt.ylabel('a2')
