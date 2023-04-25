@@ -1,4 +1,4 @@
-"""
+ """
 Code for replicating Figure 4.7
 
 My initial idea is that PyMC will be needed for this one, i project that my main difficulty will have to be in using
@@ -22,6 +22,11 @@ to poorer performance (https://www.pymc.io/projects/docs/en/v3/pymc-examples/exa
 https://discourse.pymc.io/t/multivariate-multinomial-logistic-regression/5242/2
 https://gist.github.com/jeetsukumaran/2840020
 https://www.pymc.io/projects/docs/en/v3/pymc-examples/examples/mixture_models/dirichlet_mixture_of_multinomials.html
+
+Current layout not working because I am not using the likelihood correctly in the model context block.
+https://www.pymc.io/projects/examples/en/latest/case_studies/blackbox_external_likelihood_numpy.html
+
+
 """
 
 import arviz as az
@@ -98,9 +103,9 @@ def DataGen(InputNumber, Voltages, poissonian=True): #InputNumber=# of input pho
         phi1_true=a1_true+b1_true*Voltages[i]**2 #phi=a+bV**2
         phi2_true=a2_true+b2_true*Voltages[i]**2 #phi=a+bV**2
         U_true=ConstructU(eta1_true,eta2_true,eta3_true,phi1_true,phi2_true) #Generate double MZI Unitary
-        P_click1_true=abs(top_bra@U_true@bottom_ket)**2 #Probability of click in top
+        P_click1_true=abs(top_bra@U_true@top_ket)**2 #Probability of click in top
         P_click1_true=P_click1_true[0][0]
-        P_click2_true=abs(bottom_bra@U_true@bottom_ket)**2 #Probability of click in bottom
+        P_click2_true=abs(bottom_bra@U_true@top_ket)**2 #Probability of click in bottom
         P_click2_true=P_click2_true[0][0]
         P_true=[P_click1_true,P_click2_true]
         #n=C,p=P,x=array of clicks
@@ -126,9 +131,9 @@ def Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,Voltages):
         phi1=a1+b1*Voltages[i]**2 #phi=a+bV**2
         phi2=a2+b2*Voltages[i]**2 #phi=a+bV**2
         U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
-        P_click1=abs(top_bra@U@top_ket)**2 #Probability of click in top
+        P_click1=np.abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
-        P_click2=abs(bottom_bra@U@bottom_ket)**2 #Probability of click in bottom
+        P_click2=np.abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
         P_click2=P_click2[0][0]
         P[i]=np.array([P_click1.eval(),P_click2.eval()])
         #P[i]=[P_click1.eval(),P_click2.eval()]
@@ -153,9 +158,9 @@ with Model() as model:
 
 
     #likelihood = Multinomial("likelihood", n=C, p=Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
-    likelihood = Multinomial("likelihood", n=C, p=Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
+    #pm.Potential("likelihood", Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
 
-    idata = sample(draws=int(1e5), return_inferencedata=True,cores=1)
+    idata = sample(draws=int(1e5), chains=4,step=pm.Metropolis(), return_inferencedata=True,cores=1)
 
 ###################Bayesian analysis
 az.plot_trace(idata)

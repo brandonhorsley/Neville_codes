@@ -64,9 +64,9 @@ for i in range(len(Voltages)):
     phi1_true=b1*Voltages[i]**2 #phi=a+bV**2
     phi2_true=b2*Voltages[i]**2 #phi=a+bV**2
     U=ConstructU(eta1,eta2,eta3,phi1_true,phi2_true) #Generate double MZI Unitary
-    P_click1_true=abs(top_bra@U@bottom_ket)**2 #Probability of click in top
+    P_click1_true=abs(top_bra@U@top_ket)**2 #Probability of click in top
     P_click1_true=P_click1_true[0][0]
-    P_click2_true=abs(bottom_bra@U@bottom_ket)**2 #Probability of click in bottom
+    P_click2_true=abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
     P_click2_true=P_click2_true[0][0]
     P_true=[P_click1_true,P_click2_true]
     #n=C,p=P,x=array of clicks
