@@ -78,13 +78,13 @@ def DataGen(InputNumber): #InputNumber=# of input photons= should average to abo
     phi2_true=a2_true+b2_true*V**2 #phi=a+bV**2
     U_true=ConstructU(eta1_true,eta2_true,eta3_true,phi1_true,phi2_true) #Generate double MZI Unitary
     #print(U_true.conj().T@U_true) #verifies unitarity
-    print(U_true)
+    #print(U_true)
     P_click1_true=np.abs(top_bra@U_true@top_ket)**2 #Probability of click in top
     P_click1_true=P_click1_true[0][0]
     P_click2_true=np.abs(bottom_bra@U_true@top_ket)**2 #Probability of click in bottom
     P_click2_true=P_click2_true[0][0]
     P_true=[P_click1_true,P_click2_true]
-    print(P_true)
+    #print(P_true)
     #n=C,p=P,x=array of clicks
     data=scipy.stats.multinomial.rvs(n=InputNumber,p=P_true)
     C=np.sum(data)
@@ -114,10 +114,10 @@ with Model() as model:
         phi1=a1+b1*V**2 #phi=a+bV**2
         phi2=a2+b2*V**2 #phi=a+bV**2
         U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
-        print(U.conj().T@U)
+        #print(U.conj().T@U)
         P_click1=abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
-        P_click2=abs(bottom_bra@U@bottom_ket)**2 #Probability of click in bottom
+        P_click2=abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
         P_click2=P_click2[0][0]
         P=np.array([P_click1.eval(),P_click2.eval()])
         #P[i]=[P_click1.eval(),P_click2.eval()]
@@ -125,13 +125,14 @@ with Model() as model:
         #prob[i]=scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P)
         #print(np.sum(prob))
         #return prob
-        print(P)
-        #P=np.log(P)
-        prob=pm.Multinomial.dist(n=C,p=P)
-        return prob
+        #print(P)
+        P=np.log(P)
+        #prob=pm.Multinomial.dist(n=C,p=P)
+        #return prob
+        return P
     
     #likelihood = Multinomial("likelihood", n=C, p=Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
-    pm.DensityDist("likelihood", Likelihood(eta1,eta2,eta3,a1,a2,b1,b2), observed=data)
+    pm.DensityDist("likelihood", eta1, eta2, eta3, a1,a2, b1, b2, Likelihood, observed=data)
 
     idata = sample(draws=int(1e5), chains=4,step=pm.Metropolis(), return_inferencedata=True,cores=1)
 
