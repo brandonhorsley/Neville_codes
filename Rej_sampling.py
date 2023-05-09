@@ -43,9 +43,9 @@ plt.legend()
 plt.show()
 
 def sample(size):
-    xs = np.random.normal(50, 30, size=size)
-    cs = np.random.uniform(0, 1, size=size)
-    mask = p(xs) / (M * q(xs)) > cs
+    xs = np.random.normal(50, 30, size=size) #q
+    cs = np.random.uniform(0, 1, size=size) #u
+    mask = p(xs) / (M * q(xs)) > cs #Criterion
     return xs[mask] 
 
 samples = sample(10000)
