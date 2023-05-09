@@ -8,4 +8,3 @@ For i = 1 to i = N
    Else:
       Reject x^(i)
 """
-
