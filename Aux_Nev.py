@@ -86,7 +86,14 @@ data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 #print(data) #Correct
 #print(C)
 
-def Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,Voltages):
+def Likelihood(p,Voltages):
+    eta1=p[0]
+    eta2=p[1]
+    eta3=p[2]
+    a1=p[3]
+    a2=p[4]
+    b1=p[5]
+    b2=p[6]
     #To be called after data generation
     P=np.empty((N,M))
     prob=np.empty(N)
