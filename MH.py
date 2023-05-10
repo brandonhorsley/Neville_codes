@@ -9,6 +9,8 @@ Algorithm 2 in Alex Neville thesis. Metropolis-Hastings algorithm. Middle of pag
            x^(i+1) = x'
         else:
            x^(i+1) = x^(i)
+
+A(x'|x) = min(1, (p(x'|x) g(x'))/(p(x|x') g(x)))  
 """
 
 #g should be normal distribution centred on x^(i)?
