@@ -13,6 +13,9 @@ Algorithm 4 in Alex Neville thesis. Metropolis within Gibbs sampling algorithm. 
 """
 Want to make a module of the general definitions from the main figure plots (define PS and so on)
 Also want to define a function to run the transition probability bit
+
+Need to rework transition probability fraction to account for the fact that the likelihood needs to be multiplied 
+but to avoid it getting too small i should divide each likelihood product term by the other on the denominator
 """
 
 import numpy as np
@@ -51,16 +54,29 @@ for i in range(len(p)):
         p_prime=p
         p_prime[i]=new_element
         #Now i need to do the acceptance probability bit
+        #Likelihood
         L1=Likelihood(p,V)
         L2=Likelihood(p_prime,V)
-        P1= normal(p[0],eta_sigma),normal(p[1],eta_sigma),normal(p[2],eta_sigma),uniform(p[3],a_sigma),uniform(p[4],a_sigma),normal(p[5],b_sigma),normal(p[6],b_sigma) #Prior for p
-        P2= normal(p_prime[0],eta_sigma),normal(p_prime[1],eta_sigma),normal(p_prime[2],eta_sigma),uniform(p_prime[3],a_sigma),uniform(p_prime[4],a_sigma),normal(p_prime[5],b_sigma),normal(p_prime[6],b_sigma) #prior for p'
-        g1= normal(p[i],eta_sigma) #proposal for p'|p
+        #Priors
+        #eta: mu=0.5,sigma=0.05
+        #a: uniform so N/A
+        #b: mu=0.7,sigma=0.07
+        P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+        P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+        #Candidates
+        g1= np.random.normal(p[i],eta_sigma) #proposal for p'|p
         #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
-        g2=normal(p_prime[i],eta_sigma)
-        numerator=L1*P1*g1
-        denominator=L2*P2*g2
-        elem=numerator/denominator
+        g2=np.random.normal(p_prime[i],eta_sigma)
+        #numerator=L1*P1*g1
+        #denominator=L2*P2*g2
+
+        #print(np.exp(L1)) #This is an array, how do i broadcast?
+        #print(P1)
+        #print(g1)
+        #numerator=np.exp(L1)*P1*g1
+        #denominator=np.exp(L2)*P2*g2
+        #elem=numerator/denominator
+        elem=(np.exp(L1)*P1*g1)/(np.exp(L2)*P2*g2)
         T=min(1,elem)
         move_prob=random_coin(T)
         if move_prob:
@@ -70,13 +86,19 @@ for i in range(len(p)):
         p_prime=p
         p_prime[i]=new_element
         #Now i need to do the acceptance probability bit
+        #Likelihood
         L1=Likelihood(p,V)
         L2=Likelihood(p_prime,V)
-        P1= normal(p[0],eta_sigma),normal(p[1],eta_sigma),normal(p[2],eta_sigma),uniform(p[3],a_sigma),uniform(p[4],a_sigma),normal(p[5],b_sigma),normal(p[6],b_sigma) #Prior for p
-        P2= normal(p_prime[0],eta_sigma),normal(p_prime[1],eta_sigma),normal(p_prime[2],eta_sigma),uniform(p_prime[3],a_sigma),uniform(p_prime[4],a_sigma),normal(p_prime[5],b_sigma),normal(p_prime[6],b_sigma) #prior for p'
-        g1= normal(p[i],a_sigma) #proposal for p'|p
+        #Priors
+        #eta: mu=0.5,sigma=0.05
+        #a: uniform so N/A
+        #b: mu=0.7,sigma=0.07
+        P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+        P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+        #Candidates
+        g1= np.random.normal(p[i],a_sigma) #proposal for p'|p
         #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
-        g2=normal(p_prime[i],a_sigma)
+        g2=np.random.normal(p_prime[i],a_sigma)
         numerator=L1*P1*g1
         denominator=L2*P2*g2
         elem=numerator/denominator
@@ -89,13 +111,19 @@ for i in range(len(p)):
         p_prime=p
         p_prime[i]=new_element
         #Now i need to do the acceptance probability bit
+        #Likelihood
         L1=Likelihood(p,V)
         L2=Likelihood(p_prime,V)
-        P1= normal(p[0],eta_sigma),normal(p[1],eta_sigma),normal(p[2],eta_sigma),uniform(p[3],a_sigma),uniform(p[4],a_sigma),normal(p[5],b_sigma),normal(p[6],b_sigma) #Prior for p
-        P2= normal(p_prime[0],eta_sigma),normal(p_prime[1],eta_sigma),normal(p_prime[2],eta_sigma),uniform(p_prime[3],a_sigma),uniform(p_prime[4],a_sigma),normal(p_prime[5],b_sigma),normal(p_prime[6],b_sigma) #prior for p'
-        g1= normal(p[i],b_sigma) #proposal for p'|p
+        #Priors
+        #eta: mu=0.5,sigma=0.05
+        #a: uniform so N/A
+        #b: mu=0.7,sigma=0.07
+        P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+        P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+        #Candidates
+        g1= np.random.normal(p[i],b_sigma) #proposal for p'|p
         #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
-        g2=normal(p_prime[i],b_sigma)
+        g2=np.random.normal(p_prime[i],b_sigma)
         numerator=L1*P1*g1
         denominator=L2*P2*g2
         elem=numerator/denominator
@@ -105,6 +133,8 @@ for i in range(len(p)):
             p=p_prime
 
 print(p)
+
+#Success!
 
 
     
