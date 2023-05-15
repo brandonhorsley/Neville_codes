@@ -48,93 +48,96 @@ eta_sigma=0.005
 a_sigma=np.pi/200
 b_sigma=0.75 #Based around true values from Neville_thesis_8.py
 
-for i in range(len(p)):
-    if i in [0,1,2]: #If it is eta's
-        new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
-        p_prime=p
-        p_prime[i]=new_element
-        #Now i need to do the acceptance probability bit
-        #Likelihood
-        L1=Likelihood(p,V)
-        L2=Likelihood(p_prime,V)
-        #Priors
-        #eta: mu=0.5,sigma=0.05
-        #a: uniform so N/A
-        #b: mu=0.7,sigma=0.07
-        P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-        P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-        #Candidates
-        g1= np.random.normal(p[i],eta_sigma) #proposal for p'|p
-        #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
-        g2=np.random.normal(p_prime[i],eta_sigma)
-        #numerator=L1*P1*g1
-        #denominator=L2*P2*g2
+N_iters=1000
+for n in range(N_iters):
+    for i in range(len(p)):
+        if i in [0,1,2]: #If it is eta's
+            new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
+            p_prime=p
+            p_prime[i]=new_element
+            #Now i need to do the acceptance probability bit
+            #Likelihood
+            L1=Likelihood(p,V)
+            L2=Likelihood(p_prime,V)
+            #Priors
+            #eta: mu=0.5,sigma=0.05
+            #a: uniform so N/A
+            #b: mu=0.7,sigma=0.07
+            P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+            P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+            #Candidates
+            g1= np.random.normal(p[i],eta_sigma) #proposal for p'|p
+            #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
+            g2=np.random.normal(p_prime[i],eta_sigma)
+            #numerator=L1*P1*g1
+            #denominator=L2*P2*g2
 
-        #print(np.exp(L1)) #This is an array, how do i broadcast?
-        #print(P1)
-        #print(g1)
-        #numerator=np.exp(L1)*P1*g1
-        #denominator=np.exp(L2)*P2*g2
-        #elem=numerator/denominator
-        elem=(np.exp(L1)*P1*g1)/(np.exp(L2)*P2*g2)
-        T=min(1,elem)
-        move_prob=random_coin(T)
-        if move_prob:
-            p=p_prime
-    if i in [3,4]: #If it is a's
-        new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
-        p_prime=p
-        p_prime[i]=new_element
-        #Now i need to do the acceptance probability bit
-        #Likelihood
-        L1=Likelihood(p,V)
-        L2=Likelihood(p_prime,V)
-        #Priors
-        #eta: mu=0.5,sigma=0.05
-        #a: uniform so N/A
-        #b: mu=0.7,sigma=0.07
-        P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-        P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-        #Candidates
-        g1= np.random.normal(p[i],a_sigma) #proposal for p'|p
-        #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
-        g2=np.random.normal(p_prime[i],a_sigma)
-        numerator=L1*P1*g1
-        denominator=L2*P2*g2
-        elem=numerator/denominator
-        T=min(1,elem)
-        move_prob=random_coin(T)
-        if move_prob:
-            p=p_prime
-    if i in [5,6]: #If it is b's
-        new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
-        p_prime=p
-        p_prime[i]=new_element
-        #Now i need to do the acceptance probability bit
-        #Likelihood
-        L1=Likelihood(p,V)
-        L2=Likelihood(p_prime,V)
-        #Priors
-        #eta: mu=0.5,sigma=0.05
-        #a: uniform so N/A
-        #b: mu=0.7,sigma=0.07
-        P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-        P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-        #Candidates
-        g1= np.random.normal(p[i],b_sigma) #proposal for p'|p
-        #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
-        g2=np.random.normal(p_prime[i],b_sigma)
-        numerator=L1*P1*g1
-        denominator=L2*P2*g2
-        elem=numerator/denominator
-        T=min(1,elem)
-        move_prob=random_coin(T)
-        if move_prob:
-            p=p_prime
+            #print(np.exp(L1)) #This is an array, how do i broadcast?
+            #print(P1)
+            #print(g1)
+            #numerator=np.exp(L1)*P1*g1
+            #denominator=np.exp(L2)*P2*g2
+            #elem=numerator/denominator
+            elem=(np.exp(L1)*P1*g1)/(np.exp(L2)*P2*g2)
+            T=min(1,elem)
+            move_prob=random_coin(T)
+            if move_prob:
+                p=p_prime
+        if i in [3,4]: #If it is a's
+            new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
+            p_prime=p
+            p_prime[i]=new_element
+            #Now i need to do the acceptance probability bit
+            #Likelihood
+            L1=Likelihood(p,V)
+            L2=Likelihood(p_prime,V)
+            #Priors
+            #eta: mu=0.5,sigma=0.05
+            #a: uniform so N/A
+            #b: mu=0.7,sigma=0.07
+            P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+            P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+            #Candidates
+            g1= np.random.normal(p[i],a_sigma) #proposal for p'|p
+            #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
+            g2=np.random.normal(p_prime[i],a_sigma)
+            numerator=L1*P1*g1
+            denominator=L2*P2*g2
+            elem=numerator/denominator
+            T=min(1,elem)
+            move_prob=random_coin(T)
+            if move_prob:
+                p=p_prime
+        if i in [5,6]: #If it is b's
+            new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
+            p_prime=p
+            p_prime[i]=new_element
+            #Now i need to do the acceptance probability bit
+            #Likelihood
+            L1=Likelihood(p,V)
+            L2=Likelihood(p_prime,V)
+            #Priors
+            #eta: mu=0.5,sigma=0.05
+            #a: uniform so N/A
+            #b: mu=0.7,sigma=0.07
+            P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+            P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+            #Candidates
+            g1= np.random.normal(p[i],b_sigma) #proposal for p'|p
+            #g2= g1 #proposal for p|p', g is usually assumed to be symmetric???
+            g2=np.random.normal(p_prime[i],b_sigma)
+            numerator=L1*P1*g1
+            denominator=L2*P2*g2
+            elem=numerator/denominator
+            T=min(1,elem)
+            move_prob=random_coin(T)
+            if move_prob:
+                p=p_prime
 
-print(p)
+    print(p)
 
 #Success!
+#although i need to implement the markov chain component
 
 
     

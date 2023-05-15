@@ -106,11 +106,12 @@ def Likelihood(p,Voltages):
         P_click1=P_click1[0][0]
         P_click2=np.abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
         P_click2=P_click2[0][0]
-        P[i]=np.array([P_click1.eval(),P_click2.eval()])
+        P[i]=[P_click1,P_click2]
         #P[i]=[P_click1.eval(),P_click2.eval()]
         #n=C,p=P,x=array of clicks
-        #prob[i]=scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P)
+        prob[i]=np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P))
         #print(np.sum(prob))
         #return prob
-        print(P)
-        return P
+        logsum=np.sum(prob)
+        #print(P)
+        return logsum
