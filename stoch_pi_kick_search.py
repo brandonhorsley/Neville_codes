@@ -58,6 +58,15 @@ a_sigma=np.pi/200
 b_sigma=0.75 #Based around true values from Neville_thesis_8.py
 N_iters=1000
 
+eta1_arr=[p[0]]
+eta2_arr=[p[1]]
+eta3_arr=[p[2]]
+a1_arr=[p[3]]
+a2_arr=[p[4]]
+b1_arr=[p[5]]
+b2_arr=[p[6]]
+
+
 for n in range(N_iters):
    x=np.random.choice(3,len(p))
    q=[(x[i]-1)*np.pi for i in range(len(x))]
@@ -76,4 +85,14 @@ for n in range(N_iters):
    P2= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
    if (np.exp(L1)*P1)>(np.exp(L1)*P1):
        p=np.add(p,q)
-   print(p)
+   #print(p)
+   eta1_arr.append(p[0])
+   eta2_arr.append(p[1])
+   eta3_arr.append(p[2])
+   a1_arr.append(p[3])
+   a1_arr.append(p[4])
+   b1_arr.append(p[5])
+   b2_arr.append(p[6])
+
+plt.hist(b1_arr,normed=1,bins=20) #Showing sampling
+plt.plot(b1_arr)

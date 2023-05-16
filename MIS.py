@@ -41,7 +41,16 @@ p=[0.5,0.5,0.5,0,0,0.5,0.5]
 eta_sigma=0.005
 a_sigma=np.pi/200
 b_sigma=0.75 #Based around true values from Neville_thesis_8.py
-N_iters=1000
+N_iters=100000
+
+eta1_arr=[p[0]]
+eta2_arr=[p[1]]
+eta3_arr=[p[2]]
+a1_arr=[p[3]]
+a2_arr=[p[4]]
+b1_arr=[p[5]]
+b2_arr=[p[6]]
+
 
 for n in range(N_iters):
    p_prime=[np.random.uniform(low=-np.pi,high=np.pi) for i in range(7)]
@@ -80,6 +89,22 @@ for n in range(N_iters):
       move_prob=random_coin(T)
       if move_prob:
          p=p_prime
-      print(p)
+      #print(p)
+      eta1_arr.append(p[0])
+      eta2_arr.append(p[1])
+      eta3_arr.append(p[2])
+      a1_arr.append(p[3])
+      a1_arr.append(p[4])
+      b1_arr.append(p[5])
+      b2_arr.append(p[6])
    else:
-       pass
+      eta1_arr.append(p[0])
+      eta2_arr.append(p[1])
+      eta3_arr.append(p[2])
+      a1_arr.append(p[3])
+      a1_arr.append(p[4])
+      b1_arr.append(p[5])
+      b2_arr.append(p[6])
+
+plt.hist(b1_arr,normed=1,bins=20) #Showing sampling
+plt.plot(b1_arr)

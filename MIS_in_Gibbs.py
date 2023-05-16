@@ -45,6 +45,15 @@ eta_sigma=0.005
 a_sigma=np.pi/200
 b_sigma=0.75 #Based around true values from Neville_thesis_8.py
 N_iters=1000
+
+eta1_arr=[p[0]]
+eta2_arr=[p[1]]
+eta3_arr=[p[2]]
+a1_arr=[p[3]]
+a2_arr=[p[4]]
+b1_arr=[p[5]]
+b2_arr=[p[6]]
+
 for n in range(N_iters):
    for i in range(len(p)):
       if i in [0,1,2]: #If it is eta's
@@ -121,5 +130,15 @@ for n in range(N_iters):
          if move_prob:
                p=p_prime
 
-   print(p)
-   #Method is working, although i still need to implement the markov chain component
+   #print(p)
+   eta1_arr.append(p[0])
+   eta2_arr.append(p[1])
+   eta3_arr.append(p[2])
+   a1_arr.append(p[3])
+   a1_arr.append(p[4])
+   b1_arr.append(p[5])
+   b2_arr.append(p[6])
+
+   #Method is working?
+#plt.hist(b1_arr,normed=1,bins=20) #Showing sampling
+plt.plot(eta1_arr)
