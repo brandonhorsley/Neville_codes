@@ -83,7 +83,7 @@ for n in range(N_iters):
    #b: mu=0.7,sigma=0.07
    P1= normal(p[0]+q[0],0.5,0.05)*normal(p[1]+q[1],0.5,0.05)*normal(p[2]+q[2],0.5,0.05)*uniform(p[3]+q[3])*uniform(p[4]+q[4])*normal(p[5]+q[5],0.7,0.07)*normal(p[6]+q[6],0.7,0.07) #Prior for p+q
    P2= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-   if (np.exp(L1)*P1)>(np.exp(L1)*P1):
+   if (np.exp(L1)*P1)>(np.exp(L2)*P2):
        p=np.add(p,q)
    #print(p)
    eta1_arr.append(p[0])
