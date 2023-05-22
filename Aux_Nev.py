@@ -40,9 +40,8 @@ def ConstructU(eta1,eta2,eta3,phi1,phi2):
     return U
 
 #####################Data generation
-I=[2,500,50,50,500,100,100,100000]
 Vmax=10
-N=1 #Top of page 108 ->N=number of experiments
+N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
 V_dist=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5
 V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
@@ -109,9 +108,30 @@ def Likelihood(p,Voltages):
         P[i]=[P_click1,P_click2]
         #P[i]=[P_click1.eval(),P_click2.eval()]
         #n=C,p=P,x=array of clicks
-        prob[i]=np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P))
+        #print(data[i])
+        #print(C[i])
+        #print(P)
+        #print(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P[i]))
+        #print(np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P)))
+        prob[i]=np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P[i]))
+        if np.isinf(prob[i]):
+            prob[i]=0 #To bypass -inf ruining likelihood calculations.
+        #prob[i]=np.array(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P))
+        #prob[i]=np.log(prob[i])
         #print(np.sum(prob))
         #return prob
-        logsum=np.sum(prob)
+    #print(prob)
+    logsum=np.sum(prob)
         #print(P)
-        return logsum
+    return logsum
+    """
+    def Likelihood_alpha(p_alpha,V):
+        p=[0.5,0.5,0.5,p_alpha[0],p_alpha[1],0.7,0.7]
+        ans=Likelihood(p,V)
+        return ans
+
+    def Likelihood_beta(p_beta,V):
+        p=[0.5,0.5,0.5,p_beta[0],p_beta[1],p_beta[2],p_beta[3]]
+        ans=Likelihood(p,V)
+        return ans
+    """

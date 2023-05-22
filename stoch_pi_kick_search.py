@@ -90,7 +90,7 @@ for n in range(N_iters):
    eta2_arr.append(p[1])
    eta3_arr.append(p[2])
    a1_arr.append(p[3])
-   a1_arr.append(p[4])
+   a2_arr.append(p[4])
    b1_arr.append(p[5])
    b2_arr.append(p[6])
 
