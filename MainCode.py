@@ -74,7 +74,8 @@ a_sigma=np.pi/200
 b_sigma=b_est #Based around true values from Neville_thesis_8.py
 N_iters=100000
 
-I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
+#I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
+I=[2,500,50,50,500,100,100,100]
 
 ###Burn in###
 
@@ -335,7 +336,6 @@ def Alg6(p_alpha,Niters):
                     p_alpha=p_prime
 
     return p_alpha
-
 
 def Alg7(p_alpha, Niters):
     """
