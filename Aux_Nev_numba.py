@@ -5,7 +5,7 @@ Auxiliary code for basic stuff for Neville experiments
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
-
+from numba import jit
 #####################Generating Data#######################
 
 RANDOM_SEED = 8927 #Seed for numpy random
@@ -14,11 +14,12 @@ rng = np.random.default_rng(RANDOM_SEED)
 #########################Supporting functions
 
 #Define formula for Phase shifter unitary, will define just dim=2 for now
+@jit(nopython=True)
 def construct_PS(phi):
     mat=np.array(([np.exp(1j*phi/2),0],[0,np.exp(-1j*phi/2)]))
     return mat
 
-
+@jit(nopython=True)
 def construct_BS(eta):
     mat=np.array(([np.sqrt(eta), 1j*np.sqrt(1-eta)],[1j*np.sqrt(1-eta),np.sqrt(eta)]))
     return mat
@@ -35,6 +36,7 @@ bottom_ket.shape=(2,1)
 bottom_bra=np.array([0,1])
 bottom_bra.shape=(1,2)
 
+@jit(nopython=True)
 def ConstructU(eta1,eta2,eta3,phi1,phi2):
     U=construct_BS(eta3)@construct_PS(phi2)@construct_BS(eta2)@construct_PS(phi1)@construct_BS(eta1)
     return U
@@ -44,8 +46,8 @@ Vmax=10
 N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
 V_dist=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5
-#V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
-V=V_dist
+V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
+#V=V_dist
 
 a1_true=0
 a2_true=0
@@ -57,7 +59,8 @@ eta1_true=0.447
 eta2_true=0.548
 eta3_true=0.479
 
-def DataGen(InputNumber, Voltages, poissonian=False): #InputNumber=# of input photons= should average to about 1000
+#@jit(nopython=True)
+def DataGen(InputNumber, Voltages, poissonian=True): #InputNumber=# of input photons= should average to about 1000
     data=np.empty((N,M))
     C=np.empty(N)
 
@@ -85,6 +88,7 @@ data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 #print(data) #Correct
 #print(C)
 
+#@jit(nopython=True)
 def Likelihood(p,Voltages):
     eta1=p[0]
     eta2=p[1]
@@ -124,14 +128,3 @@ def Likelihood(p,Voltages):
     logsum=np.sum(prob)
         #print(P)
     return logsum
-    """
-    def Likelihood_alpha(p_alpha,V):
-        p=[0.5,0.5,0.5,p_alpha[0],p_alpha[1],0.7,0.7]
-        ans=Likelihood(p,V)
-        return ans
-
-    def Likelihood_beta(p_beta,V):
-        p=[0.5,0.5,0.5,p_beta[0],p_beta[1],p_beta[2],p_beta[3]]
-        ans=Likelihood(p,V)
-        return ans
-    """

@@ -14,13 +14,10 @@ For further work it sounds like in the thesis he refers to randomly calibrating 
 selecting eta values and a values and b values. But as my code is i am just using predefined true values for 
 eta, a and b that doesn't change. I can edit the code to implement this when i figure out why alex chose to 
 do that.
-
-Alg4 where the Markov chain is being constructed seems to take the longest amount of time so if i can get as 
-much speedup as possible then that will be extremely useful.
 """
 
 import numpy as np
-from Aux_Nev import *
+from Aux_Nev_numba import *
 """
 From Aux_Nev the true values:
 
@@ -28,8 +25,8 @@ Vmax=10
 N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
 V_dist=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5
-#V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
-V=V_dist
+V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
+#V=V_dist
 
 a1_true=0
 a2_true=0
@@ -43,19 +40,24 @@ eta3_true=0.479
 
 Likelihood and DataGen functions come from Aux_Nev.py
 """
+
+from numba import jit
+
 #Data generation (step 1) stuff is all contained in Aux_Nev so i will leave it that way for now for readability 
 #but if i need differed functionality then i can bring the code into this code document.
 
 ###Preliminaries###
-
+@jit(nopython=True)
 def normal(x,mu,sigma):
     numerator = np.exp((-(x-mu)**2)/(2*sigma**2))
     denominator = sigma * np.sqrt(2*np.pi)
     return numerator/denominator
 
+@jit(nopython=True)
 def uniform(x):
     return 1/(2*np.pi)
 
+@jit(nopython=True)
 def random_coin(p):
     unif = np.random.uniform(0,1)
     if unif<=p:
@@ -78,18 +80,7 @@ b_sigma=b_est #Based around true values from Neville_thesis_8.py
 N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,10000]
-
-#I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
-#AKA divide I[-1] by 10 to get approx. runtime
-# Numba tend to boast an order or two orders of magnitude speedup in general (with caveats ofc)
-# 1 order of magnitude:  ~1000s=~16-17mins
-# 2 orders of magnitude: ~100s=~1-2 mins
-
-runtime=(I[-1]/10)+20
-print("runtime in seconds is {}s".format(runtime))
-print("runtime in minutes is {}min".format(runtime/60))
-print("runtime in hours is {}hr".format(runtime/(3600)))
+I=[2,500,50,50,500,100,100,100]
 
 ###Burn in###
 
@@ -100,7 +91,7 @@ p_alpha=[0.5,0.5,0.5,0,0,0.5,0.5] #step 2.1
 Defining Algorithms from thesis. Have done other documents that implement them but i 
 shall use those to define these functions which should give a specific output as wanted.
 """
-
+#@jit(nopython=True)
 def Alg4_alpha(p_alpha, Niters):
     """
     Algorithm variant of Algorithm 4 for estimating the alpha model (which involves 
@@ -137,6 +128,7 @@ def Alg4_alpha(p_alpha, Niters):
 
     return p_alpha
 
+#@jit(nopython=True)
 def Alg4_beta(p_beta, Niters):
     """
     Algorithm variant of Algorithm 4 for estimating the beta model (which involves 
@@ -196,6 +188,7 @@ def Alg4_beta(p_beta, Niters):
                     p_beta=p_prime
     return p_beta
 
+#@jit(nopython=True)
 def Alg4(p,Niters,Markov=False,ReturnAll=False):
     """
     This Algorithm is the Metropolis-Hastings within Gibbs sampling algorithm that is 
@@ -289,6 +282,7 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
         else:
             return p
 
+#@jit(nopython=False) #=True raised error
 def Alg5(p_alpha,Niters):
     """
     This Algorithm is the Metropolised Independence Sampling (MIS) algorithm that is
@@ -319,6 +313,7 @@ def Alg5(p_alpha,Niters):
             p_alpha=p_prime
     return p_alpha
 
+#@jit(nopython=True)
 def Alg6(p_alpha,Niters):
     """
     This Algorithm is the Metropolised Independence Sampling (MIS) within Gibbs algorithm 
@@ -351,6 +346,7 @@ def Alg6(p_alpha,Niters):
 
     return p_alpha
 
+#@jit(nopython=True)
 def Alg7(p_alpha, Niters):
     """
     This Algorithm is the stochastic π kick search algorithm that is described 
@@ -449,7 +445,9 @@ def Plot(chain): #Chain should contain all necessary markov chain data
         axs[i,1].plot(chain[:,i])
         axs[i,1].set_xlabel("Markov chain State Number") #Aid understanding of Markov chain plot
     plt.show()
+
 chain=np.array(chain)
+
 for i in range(len(p_conv)): #step 4
     par_array=chain[:,i]
     #Plot markov chain plot
@@ -457,4 +455,3 @@ for i in range(len(p_conv)): #step 4
     plt.plot(par_array)
     print("Mean is {}".format(np.mean(par_array)))
     print("Standard deviation is {}".format(np.std(par_array)))
-
