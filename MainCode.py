@@ -21,6 +21,7 @@ much speedup as possible then that will be extremely useful.
 
 import numpy as np
 from Aux_Nev import *
+import matplotlib.pyplot as plt
 """
 From Aux_Nev the true values:
 
@@ -75,10 +76,10 @@ suggested it should be b_est but the actual estimated value is closer to 0.7 so 
 eta_sigma=0.005
 a_sigma=np.pi/200
 b_sigma=b_est #Based around true values from Neville_thesis_8.py
-N_iters=100000
+#N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,10000]
+I=[2,500,50,50,500,100,100,100]
 
 #I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
 #AKA divide I[-1] by 10 to get approx. runtime
@@ -86,10 +87,10 @@ I=[2,500,50,50,500,100,100,10000]
 # 1 order of magnitude:  ~1000s=~16-17mins
 # 2 orders of magnitude: ~100s=~1-2 mins
 
-runtime=(I[-1]/10)+20
-print("runtime in seconds is {}s".format(runtime))
-print("runtime in minutes is {}min".format(runtime/60))
-print("runtime in hours is {}hr".format(runtime/(3600)))
+runtime=(I[-1]/10)+60
+print("runtime in seconds is around {}s".format(runtime))
+print("runtime in minutes is around {}min".format(runtime/60))
+print("runtime in hours is around {}hr".format(runtime/(3600)))
 
 ###Burn in###
 
@@ -443,18 +444,21 @@ def Plot(chain): #Chain should contain all necessary markov chain data
     """
     fig,axs=plt.subplots(len(p_conv),2) #Can use sharex,sharey for further polish if wanted
     for i in range(len(p_conv)):
-        axs[i,0].hist(chain[:,i],normed=1,bins=30)
+        axs[i,0].hist(chain[:,i],bins=30)
         #Add axs polish like axes labelling
         axs[i,0].set_ylabel(str(names[i])) #Add label to show which parameter is which
         axs[i,1].plot(chain[:,i])
         axs[i,1].set_xlabel("Markov chain State Number") #Aid understanding of Markov chain plot
     plt.show()
+
 chain=np.array(chain)
+Plot(chain)
+
 for i in range(len(p_conv)): #step 4
     par_array=chain[:,i]
     #Plot markov chain plot
     print(names[i])
-    plt.plot(par_array)
+    #plt.plot(par_array)
     print("Mean is {}".format(np.mean(par_array)))
     print("Standard deviation is {}".format(np.std(par_array)))
 
