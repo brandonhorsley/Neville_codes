@@ -22,6 +22,8 @@ much speedup as possible then that will be extremely useful.
 import numpy as np
 from Aux_Nev import *
 import matplotlib.pyplot as plt
+
+
 """
 From Aux_Nev the true values:
 
@@ -442,13 +444,14 @@ def Plot(chain): #Chain should contain all necessary markov chain data
     histogram for each parameter in the left hand column and the markov chain plot in the right hand column.
     e.g. https://python.arviz.org/en/stable/examples/plot_trace.html
     """
-    fig,axs=plt.subplots(len(p_conv),2) #Can use sharex,sharey for further polish if wanted
+    fig,axs=plt.subplots(len(p_conv),2,constrained_layout=True) #Can use sharex,sharey for further polish if wanted
     for i in range(len(p_conv)):
         axs[i,0].hist(chain[:,i],bins=30)
         #Add axs polish like axes labelling
         axs[i,0].set_ylabel(str(names[i])) #Add label to show which parameter is which
         axs[i,1].plot(chain[:,i])
         axs[i,1].set_xlabel("Markov chain State Number") #Aid understanding of Markov chain plot
+    #fig.tight_layout()
     plt.show()
 
 chain=np.array(chain)
@@ -461,4 +464,20 @@ for i in range(len(p_conv)): #step 4
     #plt.plot(par_array)
     print("Mean is {}".format(np.mean(par_array)))
     print("Standard deviation is {}".format(np.std(par_array)))
+    
+###########################################
 
+#For testing to compare unitaries, say V=1 as a simpler test
+
+U_true=ConstructU(eta1_true,eta2_true,eta3_true,a1_true+b1_true,a2_true+b2_true)
+
+phi_proof1=np.mean(chain[:,3])+np.mean(chain[:,5])
+phi_proof2=np.mean(chain[:,4])+np.mean(chain[:,6])
+
+U_proof=ConstructU(np.mean(chain[:,0]),np.mean(chain[:,1]),np.mean(chain[:,2]),phi_proof1,phi_proof2)
+
+print("U_true is")
+print(U_true)
+
+print("U_proof is")
+print(U_proof)
