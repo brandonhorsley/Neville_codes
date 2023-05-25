@@ -481,3 +481,35 @@ print(U_true)
 
 print("U_proof is")
 print(U_proof)
+
+#################################################
+"""
+from scipy.linalg import sqrtm
+
+print("Trace Distance is")
+print(0.5*np.trace(sqrtm((U_true-U_proof).conj().T@(U_true-U_proof))))
+"""
+
+#tools for comparing closeness of unitaries? I thought about trace distance but that is more for states...
+#This link suggests the Hilbert Schmidt norm:
+#https://quantumcomputing.stackexchange.com/questions/6821/what-would-be-an-ideal-fidelity-measure-to-determine-the-closeness-between-two-n
+
+#print("Hilbert-Schmidt norm is")
+#print(np.trace(U_true.conj().T@U_proof))
+
+#The link also suggests For unitary operators, our analysis of the error used in approximating one unitary by another involves the distance induced by the operator norm:
+#This corresponds to the largest eigenvalues of sqrm((U-V).conj().T@(U-V))
+#ref: https://physics.stackexchange.com/questions/588940/operator-norm-and-action
+#If U=V then operator norm will be zero, is upper bound maybe the same as dimension (e.g. 2)
+print("The operator norm is:")
+#phi_test=np.array([1,0])
+#phi_test.shape=(2,1)
+
+#O_norm=np.linalg.norm(((U_true-U_proof)@phi_test),ord=2)/np.linalg.norm(phi_test,ord=2)
+#O_norm=np.linalg.norm(U_true-U_proof,ord=np.inf)
+
+from scipy.linalg import sqrtm
+
+w,v=np.linalg.eig(sqrtm((U_true-U_proof).conj().T@(U_true-U_proof)))
+O_norm=max(w)
+print(O_norm)
