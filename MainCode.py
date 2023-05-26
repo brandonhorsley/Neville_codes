@@ -436,6 +436,8 @@ plot and polish can later be applied to get the standard plot with the smoothed 
 markov state number plot in the right column with a Plot() function.
 """
 
+from scipy.stats import gaussian_kde
+
 names=["eta1","eta2","eta3","a1","a2","b1","b2"]
 
 def Plot(chain): #Chain should contain all necessary markov chain data
@@ -446,7 +448,14 @@ def Plot(chain): #Chain should contain all necessary markov chain data
     """
     fig,axs=plt.subplots(len(p_conv),2,constrained_layout=True) #Can use sharex,sharey for further polish if wanted
     for i in range(len(p_conv)):
-        axs[i,0].hist(chain[:,i],bins=30)
+        #histogram
+        #axs[i,0].hist(chain[:,i],bins=30)
+        #smoothed kde with scott's rule bandwidth selection (bw selection is important consideration in kde)
+        eval_points = np.linspace(np.min(chain[:,i]), np.max(chain[:,i]),len(chain[:,i]))
+        kde=gaussian_kde(chain[:,i])
+        evaluated=kde.evaluate(eval_points)
+        evaluated/=sum(evaluated) #For normalisation
+        axs[i,0].plot(eval_points,evaluated)
         #Add axs polish like axes labelling
         axs[i,0].set_ylabel(str(names[i])) #Add label to show which parameter is which
         axs[i,1].plot(chain[:,i])
