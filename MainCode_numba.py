@@ -188,7 +188,7 @@ def Alg4_beta(p_beta, Niters):
                     p_beta=p_prime
     return p_beta
 
-#@jit(nopython=True)
+@jit(nopython=True)
 def Alg4(p,Niters,Markov=False,ReturnAll=False):
     """
     This Algorithm is the Metropolis-Hastings within Gibbs sampling algorithm that is 

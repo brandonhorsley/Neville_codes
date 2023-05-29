@@ -25,15 +25,19 @@ def construct_BS(eta):
     return mat
 
 top_ket=np.array([1,0])
+top_ket=top_ket.astype('complex128')
 top_ket.shape=(2,1)
 
 top_bra=np.array([1,0])
+top_bra=top_bra.astype('complex128')
 top_bra.shape=(1,2)
 
 bottom_ket=np.array([0,1])
+bottom_ket=bottom_ket.astype('complex128')
 bottom_ket.shape=(2,1)
 
 bottom_bra=np.array([0,1])
+bottom_bra=bottom_bra.astype('complex128')
 bottom_bra.shape=(1,2)
 
 @jit(nopython=True)
@@ -88,7 +92,7 @@ data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 #print(data) #Correct
 #print(C)
 
-#@jit(nopython=True)
+@jit(nopython=True)
 def Likelihood(p,Voltages):
     eta1=p[0]
     eta2=p[1]
@@ -105,6 +109,9 @@ def Likelihood(p,Voltages):
         phi1=a1+b1*Voltages[i]**2 #phi=a+bV**2
         phi2=a2+b2*Voltages[i]**2 #phi=a+bV**2
         U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
+        #print(top_bra.dtype)
+        #print(U.dtype)
+        #print(top_ket.dtype)
         P_click1=np.abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
         P_click2=np.abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
