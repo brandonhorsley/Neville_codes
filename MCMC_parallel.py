@@ -181,112 +181,6 @@ def Alg4_serial(p,chainlength,chainnum,Markov=False,ReturnAll=False):
             return MCMC
         else:
             return p
-"""
-def Markov(p,Niters,multi=False,queue=0,jobno=0):
-    
-    #This Algorithm is the Metropolis-Hastings within Gibbs sampling algorithm that is 
-    #described on the middle of page 94 in Alex Neville's thesis.
-    np.random.seed(jobno)
-    MCMC=[]
-    for n in range(Niters):
-        for i in range(len(p)):
-            if i in [0,1,2]: #If it is eta's
-                new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
-                p_prime=list(p)
-                p_prime[i]=new_element
-                #Likelihood
-                L1=Likelihood(p,V)
-                L2=Likelihood(p_prime,V)
-                #Priors
-                #eta: mu=0.5,sigma=0.05
-                #a: uniform so N/A
-                #b: mu=0.7,sigma=0.07
-                #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-                P1=normal(p[i],0.5,0.05)
-                #P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                P2=normal(p_prime[i],0.5,0.05)
-                #Candidates
-                g1= np.random.normal(p[i],eta_sigma)
-                g2=np.random.normal(p_prime[i],eta_sigma)
-                elem=(np.exp(L1)*P1*g1)/(np.exp(L2)*P2*g2)
-                T=min(1,elem)
-                move_prob=random_coin(T)
-                if move_prob:
-                    p=p_prime
-            if i in [3,4]: #If it is a's
-                new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
-                p_prime=list(p)
-                p_prime[i]=new_element
-                #Likelihood
-                L1=Likelihood(p,V)
-                L2=Likelihood(p_prime,V)
-                #Priors
-                #eta: mu=0.5,sigma=0.05
-                #a: uniform so N/A
-                #b: mu=0.7,sigma=0.07
-                #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-                P1=uniform(p[i])
-                #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                P2=uniform(p_prime[i])
-                #Candidates
-                g1= np.random.normal(p[i],a_sigma)
-                g2=np.random.normal(p_prime[i],a_sigma)
-                numerator=L1*P1*g1
-                denominator=L2*P2*g2
-                elem=numerator/denominator
-                T=min(1,elem)
-                move_prob=random_coin(T)
-                if move_prob:
-                    p=p_prime
-            if i in [5,6]: #If it is b's
-                new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
-                p_prime=list(p)
-                p_prime[i]=new_element
-                #Likelihood
-                L1=Likelihood(p,V)
-                L2=Likelihood(p_prime,V)
-                #Priors
-                #eta: mu=0.5,sigma=0.05
-                #a: uniform so N/A
-                #b: mu=0.7,sigma=0.07
-                #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-                P1=normal(p[i],0.7,0.07)
-                #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                P2=normal(p_prime[i],0.7,0.07)
-                #Candidates
-                g1= np.random.normal(p[i],b_sigma) 
-                g2=np.random.normal(p_prime[i],b_sigma)
-                numerator=L1*P1*g1
-                denominator=L2*P2*g2
-                elem=numerator/denominator
-                T=min(1,elem)
-                move_prob=random_coin(T)
-                if move_prob:
-                    p=p_prime
-        MCMC.append(p)
-
-    if multi:
-        queue.put(MCMC)
-    else:
-        return MCMC
-
-def Multi_Markov(CORES=2, T=100):
-    
-    results = []
-    #queues = [RetryQueue() for i in range(CORES)]
-    queues = [Queue() for i in range(CORES)]
-    args = [(p_start,I[-1], True, queues[i]) for i in range(CORES)]
-    jobs = [Process(target=Markov, args=(a)) for a in args]
-    for j in jobs: j.start()
-    for q in queues: results.append(q.get())
-    for j in jobs: j.join()
-    S = np.hstack(results)
-
-    return S   
-    
-S = Multi_Markov(2, 200)
-plt.scatter(S[0:101], S[101:202])
-"""
 
 def Markov(p,Niters):
     
@@ -370,28 +264,32 @@ def Markov(p,Niters):
                     p=p_prime
         MCMC.append(p)
     #print("done")
-    plt.plot(MCMC)
+    #plt.plot(MCMC)
+    #Q.put(MCMC)
     return MCMC
 
-import time
-
-def task():
-    print('Sleeping for 0.5 seconds')
-    time.sleep(0.5)
-    print('Finished sleeping')
+from multiprocessing import Pool
 
 if __name__=="__main__":
-    processes = []
+    cpus=multiprocessing.cpu_count()
+    print(cpus)
+    #processes = []
     chain_num=2
-    # Creates 10 processes then starts them
-    for i in range(chain_num):
-        p = multiprocessing.Process(target = Markov,args=(p_start,I[-1]))
-        #p=multiprocessing.Process(target=task)
-        p.start()
-        processes.append(p)
-    
-    # Joins all the processes 
-    for p in processes:
-        p.join()
+    # Creates 10 #processes then starts them
+    """
+    with Pool(processes=cpus) as pool:
+        result=pool.apply_async(Markov, (p_start,I[-1],))
+        print(result.get())
+    """
 
-    print(processes)
+    with Pool(processes=cpus) as pool:
+        for i in range(chain_num):
+            np.random.seed(i)
+            result=pool.apply_async(Markov, (p_start,I[-1],))
+            #print(result.get())
+            MCMC=np.array(result.get())
+            #print(MCMC)
+            #eta1_MCMC=MCMC[:,0]
+            #print(eta1_MCMC)
+
+            
