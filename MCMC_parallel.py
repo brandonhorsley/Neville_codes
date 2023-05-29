@@ -16,7 +16,10 @@ MCMC chains. My next step is to find a better sense of burn-in using different d
 https://stats.stackexchange.com/questions/261539/when-we-run-many-chains-at-once-in-an-mcmc-model-how-are-they-combined-together
 https://stats.stackexchange.com/questions/65614/in-mcmc-how-is-burn-in-time-chosen
 
-
+https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Geweke.Diagnostic.html
+https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Heidelberger.Diagnostic.html
+https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Raftery.Diagnostic.html
+https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Gelman.Diagnostic.html
 """
 
 from Aux_Nev import *
