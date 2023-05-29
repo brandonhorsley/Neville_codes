@@ -10,11 +10,13 @@ The link above raises a valid point that parallel chains would just generate bas
 the random seed.
 
 https://stackoverflow.com/questions/8533318/multiprocessing-pool-when-to-use-apply-apply-async-or-map
-https://machinelearningmastery.com/multiprocessing-in-python/
-https://eli.thegreenplace.net/2012/01/16/python-parallelizing-cpu-bound-tasks-with-multiprocessing/
-https://chryswoods.com/parallel_python/pool_part2.html
-https://www.digitalocean.com/community/tutorials/python-multiprocessing-example
-https://medium.com/@mehta.kavisha/different-methods-of-multiprocessing-in-python-70eb4009a990
+
+My investigation of numba has hit a wall but this code is now working so i can parallelise separate
+MCMC chains. My next step is to find a better sense of burn-in using different diagnostics.
+https://stats.stackexchange.com/questions/261539/when-we-run-many-chains-at-once-in-an-mcmc-model-how-are-they-combined-together
+https://stats.stackexchange.com/questions/65614/in-mcmc-how-is-burn-in-time-chosen
+
+
 """
 
 from Aux_Nev import *
@@ -47,6 +49,7 @@ eta3_true=0.479
 
 Likelihood and DataGen functions come from Aux_Nev.py
 """
+
 #Data generation (step 1) stuff is all contained in Aux_Nev so i will leave it that way for now for readability 
 #but if i need differed functionality then i can bring the code into this code document.
 
@@ -272,24 +275,17 @@ from multiprocessing import Pool
 
 if __name__=="__main__":
     cpus=multiprocessing.cpu_count()
-    print(cpus)
-    #processes = []
+    #print(cpus)
     chain_num=2
-    # Creates 10 #processes then starts them
-    """
-    with Pool(processes=cpus) as pool:
-        result=pool.apply_async(Markov, (p_start,I[-1],))
-        print(result.get())
-    """
 
     with Pool(processes=cpus) as pool:
         for i in range(chain_num):
+            #Change random seed otherwise candidate sampling will basically repeat and every chain will be essentially the same
             np.random.seed(i)
             result=pool.apply_async(Markov, (p_start,I[-1],))
-            #print(result.get())
             MCMC=np.array(result.get())
             #print(MCMC)
             #eta1_MCMC=MCMC[:,0]
-            #print(eta1_MCMC)
+            
 
             
