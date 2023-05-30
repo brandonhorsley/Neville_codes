@@ -2,7 +2,6 @@
 Auxiliary code for basic stuff for Neville experiments
 """
 
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 
@@ -40,12 +39,13 @@ def ConstructU(eta1,eta2,eta3,phi1,phi2):
     return U
 
 #####################Data generation
-Vmax=10
+Vmax=5
 N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
-V_dist=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5
-#V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
-V=V_dist
+V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 1
+#V1=V1+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
+V2=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 2
+#V2=V2+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
 
 a1_true=0
 a2_true=0
@@ -57,14 +57,14 @@ eta1_true=0.447
 eta2_true=0.548
 eta3_true=0.479
 
-def DataGen(InputNumber, Voltages, poissonian=False): #InputNumber=# of input photons= should average to about 1000
+def DataGen(InputNumber, V1, V2,poissonian=False): #InputNumber=# of input photons= should average to about 1000
     data=np.empty((N,M))
     C=np.empty(N)
 
     for i in range(N):
         #Input into mth mode of beamsplitter
-        phi1_true=a1_true+b1_true*Voltages[i]**2 #phi=a+bV**2
-        phi2_true=a2_true+b2_true*Voltages[i]**2 #phi=a+bV**2
+        phi1_true=a1_true+b1_true*V1[i]**2 #phi=a+bV**2
+        phi2_true=a2_true+b2_true*V2[i]**2 #phi=a+bV**2
         U_true=ConstructU(eta1_true,eta2_true,eta3_true,phi1_true,phi2_true) #Generate double MZI Unitary
         P_click1_true=abs(top_bra@U_true@top_ket)**2 #Probability of click in top
         P_click1_true=P_click1_true[0][0]
@@ -80,12 +80,13 @@ def DataGen(InputNumber, Voltages, poissonian=False): #InputNumber=# of input ph
 
     return data,C
 
-data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
+#data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
+data,C=DataGen(InputNumber=1000,V1=V1,V2=V2,poissonian=False)
 #print(np.shape(data))
 #print(data) #Correct
 #print(C)
 
-def Likelihood(p,Voltages):
+def Likelihood(p,V1,V2):
     eta1=p[0]
     eta2=p[1]
     eta3=p[2]
@@ -97,41 +98,19 @@ def Likelihood(p,Voltages):
     P=np.empty((N,M))
     prob=np.empty(N)
 
-    for i in range(len(Voltages)):
-        phi1=a1+b1*Voltages[i]**2 #phi=a+bV**2
-        phi2=a2+b2*Voltages[i]**2 #phi=a+bV**2
+    for i in range(len(V1)): #len(V1) should equal len(V2)
+        phi1=a1+b1*V1[i]**2 #phi=a+bV**2
+        phi2=a2+b2*V2[i]**2 #phi=a+bV**2
         U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
         P_click1=np.abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
         P_click2=np.abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
         P_click2=P_click2[0][0]
         P[i]=[P_click1,P_click2]
-        #P[i]=[P_click1.eval(),P_click2.eval()]
         #n=C,p=P,x=array of clicks
-        #print(data[i])
-        #print(C[i])
-        #print(P)
-        #print(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P[i]))
-        #print(np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P)))
         prob[i]=np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P[i]))
         if np.isinf(prob[i]):
             prob[i]=0 #To bypass -inf ruining likelihood calculations.
-        #prob[i]=np.array(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P))
-        #prob[i]=np.log(prob[i])
-        #print(np.sum(prob))
-        #return prob
     #print(prob)
     logsum=np.sum(prob)
-        #print(P)
     return logsum
-    """
-    def Likelihood_alpha(p_alpha,V):
-        p=[0.5,0.5,0.5,p_alpha[0],p_alpha[1],0.7,0.7]
-        ans=Likelihood(p,V)
-        return ans
-
-    def Likelihood_beta(p_beta,V):
-        p=[0.5,0.5,0.5,p_beta[0],p_beta[1],p_beta[2],p_beta[3]]
-        ans=Likelihood(p,V)
-        return ans
-    """

@@ -27,12 +27,13 @@ import matplotlib.pyplot as plt
 """
 From Aux_Nev the true values:
 
-Vmax=10
+Vmax=5
 N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
-V_dist=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5
-#V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
-V=V_dist
+V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 1
+#V1=V1+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
+V2=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 2
+#V2=V2+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
 
 a1_true=0
 a2_true=0
@@ -116,8 +117,8 @@ def Alg4_alpha(p_alpha, Niters):
                 p_prime=list(p_alpha)
                 p_prime[i]=new_element
                 #Likelihood
-                L1=Likelihood(p_alpha,V)
-                L2=Likelihood(p_prime,V)
+                L1=Likelihood(p_alpha,V1,V2)
+                L2=Likelihood(p_prime,V1,V2)
                 #Priors
                 #eta: mu=0.5,sigma=0.05
                 #a: uniform so N/A
@@ -152,8 +153,8 @@ def Alg4_beta(p_beta, Niters):
                 p_prime=list(p_beta)
                 p_prime[i]=new_element
                 #Likelihood
-                L1=Likelihood(p_beta,V)
-                L2=Likelihood(p_prime,V)
+                L1=Likelihood(p_beta,V1,V2)
+                L2=Likelihood(p_prime,V1,V2)
                 #Priors
                 #eta: mu=0.5,sigma=0.05
                 #a: uniform so N/A
@@ -177,8 +178,8 @@ def Alg4_beta(p_beta, Niters):
                 p_prime=list(p_beta)
                 p_prime[i]=new_element
                 #Likelihood
-                L1=Likelihood(p_beta,V)
-                L2=Likelihood(p_prime,V)
+                L1=Likelihood(p_beta,V1,V2)
+                L2=Likelihood(p_prime,V1,V2)
                 #Priors
                 #eta: mu=0.5,sigma=0.05
                 #a: uniform so N/A
@@ -216,8 +217,8 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     p_prime=list(p)
                     p_prime[i]=new_element
                     #Likelihood
-                    L1=Likelihood(p,V)
-                    L2=Likelihood(p_prime,V)
+                    L1=Likelihood(p,V1,V2)
+                    L2=Likelihood(p_prime,V1,V2)
                     #Priors
                     #eta: mu=0.5,sigma=0.05
                     #a: uniform so N/A
@@ -239,8 +240,8 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     p_prime=list(p)
                     p_prime[i]=new_element
                     #Likelihood
-                    L1=Likelihood(p,V)
-                    L2=Likelihood(p_prime,V)
+                    L1=Likelihood(p,V1,V2)
+                    L2=Likelihood(p_prime,V1,V2)
                     #Priors
                     #eta: mu=0.5,sigma=0.05
                     #a: uniform so N/A
@@ -264,8 +265,8 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     p_prime=list(p)
                     p_prime[i]=new_element
                     #Likelihood
-                    L1=Likelihood(p,V)
-                    L2=Likelihood(p_prime,V)
+                    L1=Likelihood(p,V1,V2)
+                    L2=Likelihood(p_prime,V1,V2)
                     #Priors
                     #eta: mu=0.5,sigma=0.05
                     #a: uniform so N/A
@@ -305,8 +306,8 @@ def Alg5(p_alpha,Niters):
         p_prime[3]=new[0]
         p_prime[4]=new[1]
         #Likelihood
-        L1=Likelihood(p_alpha,V)
-        L2=Likelihood(p_prime,V)
+        L1=Likelihood(p_alpha,V1,V2)
+        L2=Likelihood(p_prime,V1,V2)
         #Priors
         #eta: mu=0.5,sigma=0.05
         #a: uniform so N/A
@@ -334,8 +335,8 @@ def Alg6(p_alpha,Niters):
                 p_prime=list(p_alpha)
                 p_prime[i]=new_element
                 #Likelihood
-                L1=Likelihood(p_alpha,V)
-                L2=Likelihood(p_prime,V)
+                L1=Likelihood(p_alpha,V1,V2)
+                L2=Likelihood(p_prime,V1,V2)
                 #Priors
                 #eta: mu=0.5,sigma=0.05
                 #a: uniform so N/A
@@ -366,8 +367,8 @@ def Alg7(p_alpha, Niters):
         test=list(p_alpha)
         test[3]+=q[0]
         test[4]+=q[1]
-        L1=Likelihood(test,V)
-        L2=Likelihood(p_alpha,V)
+        L1=Likelihood(test,V1,V2)
+        L2=Likelihood(p_alpha,V1,V2)
         #Priors
         #eta: mu=0.5,sigma=0.05
         #a: uniform so N/A
