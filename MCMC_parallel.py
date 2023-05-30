@@ -20,6 +20,8 @@ https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Geweke.Diagnostic.h
 https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Heidelberger.Diagnostic.html
 https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Raftery.Diagnostic.html
 https://search.r-project.org/CRAN/refmans/LaplacesDemon/html/Gelman.Diagnostic.html
+
+By reviewing Alex neville's thesis it seems like his burn-in is all of step 2 which is highlighted by figure 4.8.
 """
 
 from Aux_Nev import *
