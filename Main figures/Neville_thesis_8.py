@@ -157,11 +157,12 @@ with Model() as model:
     b2= Normal("b2", mu=0.7, sigma=0.07,initval=0.5)
 
 
-    likelihood = Multinomial("likelihood", n=C, p=Likelihood, shape=(N,M), observed=data)
+    #likelihood = Multinomial("likelihood", n=C, p=Likelihood, shape=(N,M), observed=data)
+    likelihood = Multinomial("likelihood", n=C, p=Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
     #pm.Potential("likelihood", Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
 
-    idata = sample(draws=int(1e5), chains=4,step=pm.Metropolis(), return_inferencedata=True,cores=1)
-
+    #idata = sample(draws=int(1e5), chains=4,step=pm.Metropolis(), return_inferencedata=True,cores=1)
+    idata = sample(draws=int(1e5), chains=4, return_inferencedata=True,cores=1)
 ###################Bayesian analysis
 az.plot_trace(idata)
 az.plot_posterior(idata)
