@@ -111,19 +111,35 @@ for k, v in circuit_ordering:
 
 #constructU will take calculated phi value from datagen so i can keep constructU generic
 #I will build my function like i pass a unitary dictionary to it where it accepts eta values and phi values
-#e.g.U_dict={'BS':[BS3,BS2,BS1],'PS':[PS2,PS1]}
+#e.g.U_dict={'BS':[BS1,BS2,BS3],'PS':[PS1,PS2]}
 def constructU(**kwargs):
     U=np.eye(2)
     BS_counter=1
     PS_counter=1
     for i in range(len(totalorder)):
-        if i=='BS':
-            U=U@construct_BS(circuit[-BS_counter])
+        if totalorder[i]=='BS':
+            U=U@construct_BS(circuit['BS'][BS_counter])
             BS_counter+=1
-        if i=='BS':
-            U=U@construct_PS(circuit[-PS_counter])
+        if totalorder[i]=='PS':
+            U=U@construct_PS(circuit['PS'][PS_counter])
             PS_counter+=1
     return U
+
+#Need a seperate function that takes my p_V dictionary that gets passed to my Likelihood function
+#which will have different keys
+def constructU_from_p(etas,phis):
+    U=np.eye(2)
+    BS_counter=1
+    PS_counter=1
+    for i in range(len(totalorder)):
+        if totalorder[i]=='BS':
+            U=U@construct_BS(etas[BS_counter])
+            BS_counter+=1
+        if totalorder[i]=='PS':
+            U=U@construct_PS(etas[PS_counter])
+            PS_counter+=1
+    return U
+
 
 Vmax=5
 N=100 #Top of page 108 ->N=number of experiments
@@ -137,18 +153,77 @@ V=[]
 V.append(V1)
 V.append(V2)
 
+expanded_dict= circuit.copy()
+#print(circuit)
+expanded_dict[str(V)].append(V)
+#print(circuit)
 #*V should be length same as number of phase shifters
 """
 but then to generate phi values i need to relate a,b values as well as the voltage across each phase shifter for a given experiment so what may be necessary is another default_dict
 like {'BS':[BSarray],'PS':[[a1,b1],[a2,b2]],V:[[V1array],[V2array]]}.
 """
-
-def DataGen(InputNumber,*V,poissonian=False):
+def DataGen(InputNumber,poissonian=False, **expanded_dict):
     data=np.empty((N,M))
     C=np.empty(N)
 
     for i in range(N):
-        PS_length=len(V) #should equal 2 in this case
-        PS=[]
-        for _ in range(PS_length):
-            PS.append()
+        phis=[]
+        for j in range(len(expanded_dict['V'])):
+            phis.append(expanded_dict['PS'][j][0]+expanded_dict['PS'][j][1]*expanded_dict['V'][j][i]**2)
+        U_true=constructU(**expanded_dict.pop('V'))
+        P_click1_true=abs(top_bra@U_true@top_ket)**2 #Probability of click in top
+        P_click1_true=P_click1_true[0][0]
+        P_click2_true=abs(bottom_bra@U_true@top_ket)**2 #Probability of click in bottom
+        P_click2_true=P_click2_true[0][0]
+        P_true=[P_click1_true,P_click2_true]
+        #n=C,p=P,x=array of clicks
+        data[i]=scipy.stats.multinomial.rvs(n=InputNumber,p=P_true)
+        #Need to add poissonian noise
+        if poissonian==True:
+            data[i]+=rng.poisson(size=len(data[i]))
+        C[i]=np.sum(data[i])
+
+    return data,C
+
+"""
+Haven't formally checked DataGen so keep that in mind.
+"""
+
+#data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
+data,C=DataGen(InputNumber=1000,poissonian=False, **expanded_dict)
+#print(np.shape(data))
+print(data) #Correct
+print(C)
+
+"""
+The final component of this document then is to create the likelihood python function.
+What passes to this is a generic array 'p' of parameter values and V values in the standard case,
+so then the thing to think about is what am i actually going to parse to this function. This 
+should reflect what i will be using in the maincode which i think will just be another dictionary.
+since i seem to get an error when i try to pass two **kwargs (e.g. foo(**p,**V), i will just make use of
+a dictionary that has p and V combined)
+"""
+
+def Likelihood(**p_V):
+    #To be called after data generation
+    P=np.empty((N,M))
+    prob=np.empty(N)
+
+    for i in range(N):
+        phis=[]
+        for j in range(len(p_V['V'])):
+            phis.append(expanded_dict['a'][j]+expanded_dict['b'][j]*expanded_dict['V'][j][i]**2)
+        etas=p_V['eta']
+        U=constructU_from_p(etas,phis)
+        P_click1=np.abs(top_bra@U@top_ket)**2 #Probability of click in top
+        P_click1=P_click1[0][0]
+        P_click2=np.abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
+        P_click2=P_click2[0][0]
+        P[i]=[P_click1,P_click2]
+        #n=C,p=P,x=array of clicks
+        prob[i]=np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P[i]))
+        if np.isinf(prob[i]):
+            prob[i]=0 #To bypass -inf ruining likelihood calculations.
+    #print(prob)
+    logsum=np.sum(prob)
+    return logsum
