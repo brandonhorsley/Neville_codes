@@ -17,4 +17,22 @@ So then in building some intuition first around runtime scaling with model scali
 runtime scaling by profiling the model building component, the likelihood component, and the Alg4 component and 
 then put these parts together. I could just hardcode a bunch of different cases but i think it would be optimal
 for me to generalise my code first.
+Following generalisation of main code i have collected the following:
+------------------------------------------------------------------------
+List for collating runtimes for different scenarios of format with Vlength=100, [paramnums,MCMClength]=runtime
+
+[7,100]=66.27658700942993
+[7,1000]=334.0539951324463
+[10,100]=115.77437496185303
+[10,1000]=713.606169462204
+[13,100]=132.8034279346466
+[13,1000]=729.9649174213409
+
+-------------------------------------------------------------------------
+
+This essentially indicates that number of parameters does lead to a noticeable increase,
+but certainly much less of an impact than MCMC length.
+
+Even then in the hypothetical case of imagining larger circuits with many more components and thus many more parameters,
+perhaps breaking down into hierarchical blocks and/or parallelisation could be beneficially impactful.
 """

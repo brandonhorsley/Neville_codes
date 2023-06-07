@@ -3,11 +3,37 @@ This code will be dedicated to generalising MainCode.py so it isn't specifically
 
 I have copied over the code from my generalised Aux_Nev code so that it is all in the same file
 for completeness.
+
+'a' values seem to deviate strongly after step 2.iii so on step iv it jumps up to worse numbers.
+so it is algorithm 7 (the stochastic pi kick search) that starts the big deviation. I think 
+the code is functionally doing what it should be, the only thing i haven't debugged is the 
+likelihood and the inequality check but the likelihood should surely be working fine since 
+it works in the other algs...
+
+So really my main thing is that i think the deviation lies in the inequality criterion, my
+hardcoded variant raises runtime errors while my generalised code doesn't so maybe that highlights some troubles. 
+
+Hardcoded likelihoods often wind up rounding to zero, while this version is on the order of -232 and so isn't rounded to zero
+smallest value is usually around E-308 so really it can be seen then that there is some rounding errors.
+It still seems strange to me that the code that is generating worse estimates for a. What if i modulo 2pi
+it, is that valid and will they still be good? They will still be good, so now it is just a case of knowing if that is valid to do...
+
+List for collating runtimes for different scenarios of format with Vlength=100, [paramnums,MCMClength]=runtime
+
+[7,100]=66.27658700942993
+[7,1000]=334.0539951324463
+[10,100]=115.77437496185303
+[10,1000]=713.606169462204
+[13,100]=132.8034279346466
+[13,1000]=729.9649174213409
+
+Notes for further generalisation is that i am still hardcoding my Voltages and my p_alphas so they need to be sorted, have worked with for my runtime investigation but will need to sort.
 """
 
 import numpy as np
 import scipy
 from collections import OrderedDict
+import time
 
 #####################Generating Data#######################
 
@@ -57,7 +83,8 @@ eta3_true=0.479
 #circuit_ordering=[('BS',0.5),('PS',np.pi),('BS',0.49),('PS',-np.pi),('BS',0.51)]
 #Phase shifter stores a,b as [a,b], i will need to remember this in future components.
 #Additionally i will have to remember that circuit ordering and total ordering is reading from left to right
-circuit_ordering=[('BS',eta1_true),('PS',[a1_true,b1_true]),('BS',eta2_true),('PS',[a2_true,b2_true]),('BS',eta3_true)]
+#circuit_ordering=[('BS',eta1_true),('PS',[a1_true,b1_true]),('BS',eta2_true),('PS',[a2_true,b2_true]),('BS',eta3_true)]
+circuit_ordering=[('BS',eta2_true),('PS',[a2_true,b2_true]),('BS',eta3_true),('PS',[a1_true,b2_true]),('BS',eta2_true),('BS',eta1_true),('PS',[a1_true,b1_true])]
 circuit = defaultdict(list)
 totalorder=[]
 for k, v in circuit_ordering:
@@ -89,6 +116,8 @@ def constructU(**kwargs):
 #which will have different keys
 def constructU_from_p(etas,phis):
     U=np.eye(2)
+    #print(etas)
+    #print(phis)
     BS_counter=0
     PS_counter=0
     for i in range(len(totalorder)):
@@ -96,7 +125,7 @@ def constructU_from_p(etas,phis):
             U=U@construct_BS(etas[BS_counter])
             BS_counter+=1
         if totalorder[i]=='PS':
-            U=U@construct_PS(etas[PS_counter])
+            U=U@construct_PS(phis[PS_counter])
             PS_counter+=1
     return U
 
@@ -107,6 +136,9 @@ V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 fo
 #V1=V1+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
 V2=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 2
 #V2=V2+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
+V3=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 2
+
+
 #Voltage array being passed
 V=[]
 V.append(list(V1))
@@ -115,6 +147,8 @@ V.append(list(V1))
 V.append(list(V2))
 #print(list(V2))
 #V=V[0]
+V.append(list(V3))
+#V.append(list(V4))
 expanded_dict= circuit.copy()
 #print(circuit)
 expanded_dict['V'].append(V)
@@ -125,7 +159,7 @@ expanded_dict['V'].append(V)
 but then to generate phi values i need to relate a,b values as well as the voltage across each phase shifter for a given experiment so what may be necessary is another default_dict
 like {'BS':[BSarray],'PS':[[a1,b1],[a2,b2]],V:[[V1array],[V2array]]}.
 """
-print(expanded_dict)
+#print(expanded_dict)
 def DataGen(InputNumber,poissonian=False, **expanded_dict):
     data=np.empty((N,M))
     C=np.empty(N)
@@ -181,10 +215,12 @@ def Likelihood(**p_V):
 
     for i in range(N):
         phis=[]
-        for j in range(len(p_V['V'])):
+        for j in range(len(p_V['a'])):
             #phis.append(expanded_dict['a'][j]+expanded_dict['b'][j]*expanded_dict['V'][j][i]**2)
             phis.append(p_V['a'][j]+p_V['b'][j]*p_V['V'][0][j][i]**2)
         etas=p_V['eta']
+        #print(etas)
+        #print(phis)
         U=constructU_from_p(etas,phis)
         P_click1=np.abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
@@ -242,16 +278,17 @@ I=[2,500,50,50,500,100,100,100]
 # 2 orders of magnitude: ~100s=~1-2 mins
 
 runtime=(I[-1]/10)+60
-print("runtime in seconds is around {}s".format(runtime))
-print("runtime in minutes is around {}min".format(runtime/60))
-print("runtime in hours is around {}hr".format(runtime/(3600)))
+#print("runtime in seconds is around {}s".format(runtime))
+#print("runtime in minutes is around {}min".format(runtime/60))
+#print("runtime in hours is around {}hr".format(runtime/(3600)))
 
 ###Burn in###
 
 #p_alpha=[0.5,0.5,0.5,0,0,0.5,0.5] #step 2.1
 #p_alpha=[0,0] #step 2.1
 
-p_alpha_list=[('eta',0.5),('a',0),('b',0.5),('eta',0.5),('a',0),('b',0.5),('eta',0.5)]
+#p_alpha_list=[('eta',0.5),('a',0),('b',0.5),('eta',0.5),('a',0),('b',0.5),('eta',0.5)]
+p_alpha_list=[('eta',0.5),('a',0),('b',0.5),('eta',0.5),('a',0),('b',0.5),('eta',0.5),('eta',0.5),('a',0),('b',0.5)]
 p_alpha = defaultdict(list)
 for k, v in p_alpha_list:
     p_alpha[k].append(v)
@@ -566,12 +603,14 @@ def Alg7(Niters, **p_alpha):
     for n in range(Niters):
         x=np.random.choice(3,len(p_alpha['a']))
         q=[(x[i]-1)*np.pi for i in range(len(x))]
+        #print(q)
         #Likelihood
         test=p_alpha.copy()
+        #print(test['a'])
         #test[3]+=q[0]
         for i in range(len(test['a'])):
             test['a'][i]+=q[i]
-        
+        #print(test['a'])
         #test[4]+=q[1]
         
         L1=Likelihood(**test)
@@ -585,35 +624,43 @@ def Alg7(Niters, **p_alpha):
         P1=1
         for i in range(len(test['a'])):
             P1*=uniform(test['a'][i])
+        #print(P1)
         #P2= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
         #P2=uniform(p_alpha[3])*uniform(p_alpha[4])
         P2=1
         for i in range(len(p_alpha['a'])):
             P2*=uniform(p_alpha['a'][i])
+        #print(P2)
+        #print(np.exp(L1))
+        #print(P1)
+        #print(np.exp(L2))
+        #print(P2)
         if (np.exp(L1)*P1)>(np.exp(L2)*P2):
             p_alpha=test
     return p_alpha
 
 #Main code bulk
 
+start=time.time()
+
 for i in range(I[0]): #step 2.2
     #step 2.2i
     p_alpha=Alg5(I[1],**p_alpha)
-    print(p_alpha)
-    print("###step 2.2i done###")
+    #print(p_alpha)
+    #print("###step 2.2i done###")
     #step 2.2ii
     p_alpha=Alg6(I[2],**p_alpha)
-    print(p_alpha)
-    print("###step 2.2ii done###")
+    #print(p_alpha)
+    #print("###step 2.2ii done###")
     #step 2.2iii
     #p_alpha=Alg4(p_alpha, I[3]) #p_alpha is first p_alpha
     p_alpha=Alg4_alpha(I[3],**p_alpha) #p_alpha is second p_alpha
-    print(p_alpha)
-    print("###step 2.2iii done###")
+    #print(p_alpha)
+    #print("###step 2.2iii done###")
     #step 2.2iv (and 2.2v)
     p_alpha=Alg7(I[4],**p_alpha)
-    print(p_alpha)
-    print("###step 2.2iv done###")
+    #print(p_alpha)
+    #print("###step 2.2iv done###")
 
 #p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],b_est,b_est] #step 2.3
 #p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],0.7,0.7]
@@ -625,30 +672,33 @@ for i in range(len(p_beta['b'])):
 
 
 
-print("p_beta initial is: {}".format(p_beta))
+#print("p_beta initial is: {}".format(p_beta))
 #step 2.4
 p_beta=Alg4_beta(I[5],**p_beta)
-print(p_beta)
-print("###step 2.4 done###")
+#print(p_beta)
+#print("###step 2.4 done###")
 
 #p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
 p_zero=p_beta.copy()
 for i in range(len(p_zero['eta'])):
     p_zero['eta'][i]=0.5
-print("p_zero is: {}".format(p_zero))
+#print("p_zero is: {}".format(p_zero))
 #step 2.6
 p_zero=Alg4(I[6], Markov=False,**p_zero)
-print(p_zero)
-print("###step 2.6 done###")
+#print(p_zero)
+#print("###step 2.6 done###")
 
 p_conv=p_zero.copy() #step 2.7
-print("p_conv is: {}".format(p_conv))
+#print("p_conv is: {}".format(p_conv))
 
 ###Main Markov Chain Generation###
 
 #Step 3
 chain=Alg4(I[7], Markov=True,**p_conv)
 
+end=time.time()
+
+print("runtime is {}".format(end-start))
 ###Parameter estimation###
 
 """
@@ -707,6 +757,11 @@ def Plot(chain): #Chain should contain all necessary markov chain data
     #fig.tight_layout()
     plt.show()
 
+#print(chain)
+"""
+chain contains an array of default dictionaries so i sgould figure out how to handle this output.
+"""
+"""
 chain=np.array(chain)
 Plot(chain)
 
@@ -717,3 +772,4 @@ for i in range(len(p_conv)): #step 4
     #plt.plot(par_array)
     print("Mean is {}".format(np.mean(par_array)))
     print("Standard deviation is {}".format(np.std(par_array)))
+"""

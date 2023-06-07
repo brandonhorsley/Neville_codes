@@ -364,9 +364,11 @@ def Alg7(p_alpha, Niters):
         x=np.random.choice(3,2)
         q=[(x[i]-1)*np.pi for i in range(len(x))]
         #Likelihood
+        #print(q)
         test=list(p_alpha)
         test[3]+=q[0]
         test[4]+=q[1]
+        #print(test)
         L1=Likelihood(test,V1,V2)
         L2=Likelihood(p_alpha,V1,V2)
         #Priors
@@ -375,8 +377,14 @@ def Alg7(p_alpha, Niters):
         #b: mu=0.7,sigma=0.07
         #P1= normal(test[0],0.5,0.05)*normal(test[1],0.5,0.05)*normal(test[2],0.5,0.05)*uniform(test[3])*uniform(test[4])*normal(test[5],0.7,0.07)*normal(test[6],0.7,0.07) #Prior for p+q
         P1=uniform(test[3])*uniform(test[4])
+        #print(P1)
         #P2= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
         P2=uniform(p_alpha[3])*uniform(p_alpha[4])
+        #print(P2)
+        print(np.exp(L1))
+        print(P1)
+        print(np.exp(L2))
+        print(P2)
         if (np.exp(L1)*P1)>(np.exp(L2)*P2):
             p_alpha=test
     return p_alpha
@@ -386,40 +394,40 @@ def Alg7(p_alpha, Niters):
 for i in range(I[0]): #step 2.2
     #step 2.2i
     p_alpha=Alg5(p_alpha,I[1])
-    print(p_alpha)
-    print("###step 2.2i done###")
+    #print(p_alpha)
+    #print("###step 2.2i done###")
     #step 2.2ii
     p_alpha=Alg6(p_alpha,I[2])
-    print(p_alpha)
-    print("###step 2.2ii done###")
+    #print(p_alpha)
+    #print("###step 2.2ii done###")
     #step 2.2iii
     #p_alpha=Alg4(p_alpha, I[3]) #p_alpha is first p_alpha
     p_alpha=Alg4_alpha(p_alpha, I[3]) #p_alpha is second p_alpha
-    print(p_alpha)
-    print("###step 2.2iii done###")
+    #print(p_alpha)
+    #print("###step 2.2iii done###")
     #step 2.2iv (and 2.2v)
     p_alpha=Alg7(p_alpha,I[4])
-    print(p_alpha)
-    print("###step 2.2iv done###")
+    #print(p_alpha)
+    #print("###step 2.2iv done###")
 
 #p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],b_est,b_est] #step 2.3
 p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],0.7,0.7]
 
-print("p_beta initial is: {}".format(p_beta))
+#print("p_beta initial is: {}".format(p_beta))
 #step 2.4
 p_beta=Alg4_beta(p_beta, I[5])
-print(p_beta)
-print("###step 2.4 done###")
+#print(p_beta)
+#print("###step 2.4 done###")
 
 p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
-print("p_zero is: {}".format(p_zero))
+#print("p_zero is: {}".format(p_zero))
 #step 2.6
 p_zero=Alg4(p_zero,I[6], Markov=False)
-print(p_zero)
-print("###step 2.6 done###")
+#print(p_zero)
+#print("###step 2.6 done###")
 
 p_conv=p_zero #step 2.7
-print("p_conv is: {}".format(p_conv))
+#print("p_conv is: {}".format(p_conv))
 
 
 ###Main Markov Chain Generation###
