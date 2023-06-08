@@ -82,7 +82,7 @@ b_sigma=b_est #Based around true values from Neville_thesis_8.py
 #N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,100]
+I=[2,500,50,50,500,100,100,1000]
 
 #I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
 #AKA divide I[-1] by 10 to get approx. runtime
@@ -98,6 +98,7 @@ print("runtime in hours is around {}hr".format(runtime/(3600)))
 ###Burn in###
 
 p_alpha=[0.5,0.5,0.5,0,0,0.5,0.5] #step 2.1
+print("p_alpha initial is {}".format(p_alpha))
 #p_alpha=[0,0] #step 2.1
 
 """
@@ -381,10 +382,10 @@ def Alg7(p_alpha, Niters):
         #P2= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
         P2=uniform(p_alpha[3])*uniform(p_alpha[4])
         #print(P2)
-        print(np.exp(L1))
-        print(P1)
-        print(np.exp(L2))
-        print(P2)
+        #print(np.exp(L1))
+        #print(P1)
+        #print(np.exp(L2))
+        #print(P2)
         if (np.exp(L1)*P1)>(np.exp(L2)*P2):
             p_alpha=test
     return p_alpha
@@ -394,40 +395,40 @@ def Alg7(p_alpha, Niters):
 for i in range(I[0]): #step 2.2
     #step 2.2i
     p_alpha=Alg5(p_alpha,I[1])
-    #print(p_alpha)
-    #print("###step 2.2i done###")
+    print(p_alpha)
+    print("###step 2.2i done###")
     #step 2.2ii
     p_alpha=Alg6(p_alpha,I[2])
-    #print(p_alpha)
-    #print("###step 2.2ii done###")
+    print(p_alpha)
+    print("###step 2.2ii done###")
     #step 2.2iii
     #p_alpha=Alg4(p_alpha, I[3]) #p_alpha is first p_alpha
     p_alpha=Alg4_alpha(p_alpha, I[3]) #p_alpha is second p_alpha
-    #print(p_alpha)
-    #print("###step 2.2iii done###")
+    print(p_alpha)
+    print("###step 2.2iii done###")
     #step 2.2iv (and 2.2v)
     p_alpha=Alg7(p_alpha,I[4])
-    #print(p_alpha)
-    #print("###step 2.2iv done###")
+    print(p_alpha)
+    print("###step 2.2iv done###")
 
 #p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],b_est,b_est] #step 2.3
 p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],0.7,0.7]
 
-#print("p_beta initial is: {}".format(p_beta))
+print("p_beta initial is: {}".format(p_beta))
 #step 2.4
 p_beta=Alg4_beta(p_beta, I[5])
-#print(p_beta)
-#print("###step 2.4 done###")
+print(p_beta)
+print("###step 2.4 done###")
 
 p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
-#print("p_zero is: {}".format(p_zero))
+print("p_zero is: {}".format(p_zero))
 #step 2.6
 p_zero=Alg4(p_zero,I[6], Markov=False)
-#print(p_zero)
-#print("###step 2.6 done###")
+print(p_zero)
+print("###step 2.6 done###")
 
 p_conv=p_zero #step 2.7
-#print("p_conv is: {}".format(p_conv))
+print("p_conv is: {}".format(p_conv))
 
 
 ###Main Markov Chain Generation###
