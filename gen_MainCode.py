@@ -17,22 +17,10 @@ Hardcoded likelihoods often wind up rounding to zero, while this version is on t
 smallest value is usually around E-308 so really it can be seen then that there is some rounding errors.
 It still seems strange to me that the code that is generating worse estimates for a. What if i modulo 2pi
 it, is that valid and will they still be good? They will still be good, so now it is just a case of knowing if that is valid to do...
-
-List for collating runtimes for different scenarios of format with Vlength=100, [paramnums,MCMClength]=runtime
-
-[7,100]=66.27658700942993
-[7,1000]=334.0539951324463
-[10,100]=115.77437496185303
-[10,1000]=713.606169462204
-[13,100]=132.8034279346466
-[13,1000]=729.9649174213409
-
-Notes for further generalisation is that i am still hardcoding my Voltages and my p_alphas so they need to be sorted, have worked with for my runtime investigation but will need to sort.
 """
 
 import numpy as np
 import scipy
-from collections import OrderedDict
 import time
 
 #####################Generating Data#######################
@@ -80,11 +68,9 @@ eta1_true=0.447
 eta2_true=0.548
 eta3_true=0.479
 
-#circuit_ordering=[('BS',0.5),('PS',np.pi),('BS',0.49),('PS',-np.pi),('BS',0.51)]
 #Phase shifter stores a,b as [a,b], i will need to remember this in future components.
 #Additionally i will have to remember that circuit ordering and total ordering is reading from left to right
 circuit_ordering=[('BS',eta1_true),('PS',[a1_true,b1_true]),('BS',eta2_true),('PS',[a2_true,b2_true]),('BS',eta3_true)]
-#circuit_ordering=[('BS',eta2_true),('PS',[a2_true,b2_true]),('BS',eta3_true),('PS',[a1_true,b2_true]),('BS',eta2_true),('BS',eta1_true),('PS',[a1_true,b1_true])]
 circuit = defaultdict(list)
 totalorder=[]
 for k, v in circuit_ordering:
@@ -93,24 +79,6 @@ for k, v in circuit_ordering:
 
 #print(circuit)
 #print(totalorder)
-
-#constructU will take calculated phi value from datagen so i can keep constructU generic
-#I will build my function like i pass a unitary dictionary to it where it accepts eta values and phi values
-#e.g.U_dict={'BS':[BS1,BS2,BS3],'PS':[PS1,PS2]}
-def constructU(**kwargs):
-    U=np.eye(2)
-    BS_counter=0
-    PS_counter=0
-    for i in range(len(totalorder)):
-        if totalorder[i]=='BS':
-            print(circuit['BS'][BS_counter])
-            U=U@construct_BS(circuit['BS'][BS_counter])
-            BS_counter+=1
-        if totalorder[i]=='PS':
-            print(circuit['PS'][PS_counter])
-            U=U@construct_PS(circuit['PS'][PS_counter])
-            PS_counter+=1
-    return U
 
 #Need a seperate function that takes my p_V dictionary that gets passed to my Likelihood function
 #which will have different keys
@@ -133,44 +101,20 @@ Vmax=5
 N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
 
-"""
-#commented out since hardcoded
-
-V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 1
-#V1=V1+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
-V2=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 2
-#V2=V2+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
-V3=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 2
-
-
-#Voltage array being passed
-V=[]
-V.append(list(V1))
-#print(list(V1))
-#print(V)
-V.append(list(V2))
-#print(list(V2))
-#V=V[0]
-#V.append(list(V3))
-#V.append(list(V4))
-"""
 V=[]
 for _ in range(len(circuit['PS'])):
-    Velem=V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 1
-    #V1=V1+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
+    Velem=V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter
+    #Velem=Velem+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
     V.append(list(Velem))
 
 expanded_dict= circuit.copy()
-#print(circuit)
 expanded_dict['V'].append(V)
-#print(circuit)
-#*V should be length same as number of phase shifters
-#print(expanded_dict)
+
 """
 but then to generate phi values i need to relate a,b values as well as the voltage across each phase shifter for a given experiment so what may be necessary is another default_dict
 like {'BS':[BSarray],'PS':[[a1,b1],[a2,b2]],V:[[V1array],[V2array]]}.
 """
-#print(expanded_dict)
+
 def DataGen(InputNumber,poissonian=False, **expanded_dict):
     data=np.empty((N,M))
     C=np.empty(N)
@@ -178,14 +122,8 @@ def DataGen(InputNumber,poissonian=False, **expanded_dict):
     for i in range(N):
         phis=[]
         for j in range(len(expanded_dict['PS'])):
-            #print(expanded_dict['PS'][j][0])
-            #print(expanded_dict['PS'][j][1])
-            #print(expanded_dict['V'][0][0])
             phis.append(expanded_dict['PS'][j][0]+expanded_dict['PS'][j][1]*expanded_dict['V'][0][j][i]**2)
-            #print(phis)
-        #_=removekey(expanded_dict,'V')
-        U_true=constructU_from_p(expanded_dict['BS'],phis)
-        #U_true=constructU(**expanded_dict)        
+        U_true=constructU_from_p(expanded_dict['BS'],phis)        
         P_click1_true=abs(top_bra@U_true@top_ket)**2 #Probability of click in top
         P_click1_true=P_click1_true[0][0]
         P_click2_true=abs(bottom_bra@U_true@top_ket)**2 #Probability of click in bottom
@@ -200,24 +138,11 @@ def DataGen(InputNumber,poissonian=False, **expanded_dict):
 
     return data,C
 
-"""
-Haven't formally checked DataGen so keep that in mind.
-"""
 
-#data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 data,C=DataGen(InputNumber=1000,poissonian=False, **expanded_dict)
 #print(np.shape(data))
 #print(data) #Correct
 #print(C)
-
-"""
-The final component of this document then is to create the likelihood python function.
-What passes to this is a generic array 'p' of parameter values and V values in the standard case,
-so then the thing to think about is what am i actually going to parse to this function. This 
-should reflect what i will be using in the maincode which i think will just be another dictionary.
-since i seem to get an error when i try to pass two **kwargs (e.g. foo(**p,**V), i will just make use of
-a dictionary that has p and V combined)
-"""
 
 def Likelihood(**p_V):
     #To be called after data generation
@@ -227,11 +152,8 @@ def Likelihood(**p_V):
     for i in range(N):
         phis=[]
         for j in range(len(p_V['a'])):
-            #phis.append(expanded_dict['a'][j]+expanded_dict['b'][j]*expanded_dict['V'][j][i]**2)
             phis.append(p_V['a'][j]+p_V['b'][j]*p_V['V'][0][j][i]**2)
         etas=p_V['eta']
-        #print(etas)
-        #print(phis)
         U=constructU_from_p(etas,phis)
         P_click1=np.abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
@@ -242,7 +164,6 @@ def Likelihood(**p_V):
         prob[i]=np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P[i]))
         if np.isinf(prob[i]):
             prob[i]=0 #To bypass -inf ruining likelihood calculations.
-    #print(prob)
     logsum=np.sum(prob)
     return logsum
 
@@ -279,37 +200,11 @@ a_sigma=np.pi/200
 b_sigma=b_est #Based around true values from Neville_thesis_8.py
 #N_iters=100000
 
-#I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
+#I=[2,500,50,50,500,100,100,100_000] #Determines iteration number for each algorithm call, 100_000 allowed since python 3.6
 I=[2,500,50,50,500,100,100,100]
 
-#I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
-#AKA divide I[-1] by 10 to get approx. runtime
-# Numba tend to boast an order or two orders of magnitude speedup in general (with caveats ofc)
-# 1 order of magnitude:  ~1000s=~16-17mins
-# 2 orders of magnitude: ~100s=~1-2 mins
-
-runtime=(I[-1]/10)+60
-#print("runtime in seconds is around {}s".format(runtime))
-#print("runtime in minutes is around {}min".format(runtime/60))
-#print("runtime in hours is around {}hr".format(runtime/(3600)))
 
 ###Burn in###
-
-#p_alpha=[0.5,0.5,0.5,0,0,0.5,0.5] #step 2.1
-#p_alpha=[0,0] #step 2.1
-
-"""
-#Commented out since hardcoded
-p_alpha_list=[('eta',0.5),('a',0),('b',0.5),('eta',0.5),('a',0),('b',0.5),('eta',0.5)]
-#p_alpha_list=[('eta',0.5),('a',0),('b',0.5),('eta',0.5),('a',0),('b',0.5),('eta',0.5),('eta',0.5),('a',0),('b',0.5)]
-p_alpha = defaultdict(list)
-for k, v in p_alpha_list:
-    p_alpha[k].append(v)
-
-print(p_alpha)
-
-p_alpha['V'].append(V)
-"""
 
 p_alpha_list=[]
 for elem in totalorder:
@@ -326,27 +221,8 @@ p_alpha = defaultdict(list)
 for k, v in p_alpha_list:
     p_alpha[k].append(v)
 
-"""
-#Automated way of doing it will be to inspect totalorder and count how many 'BS' and 'PS' and use that to inform creation of p_alpha_list
-BSnum=totalorder.count('BS')
-PSnum=totalorder.count('PS')
-#print(p_alpha_list)
-#p_alpha = defaultdict(list)
-#for k, v in p_alpha_list:
-#    p_alpha[k].append(v)
-etalist=[0.5]*BSnum
-alist=[0]*PSnum
-blist=[0.5]*PSnum
-"""
-
-print(p_alpha)
-
 p_alpha['V'].append(V)
 
-"""
-Defining Algorithms from thesis. Have done other documents that implement them but i 
-shall use those to define these functions which should give a specific output as wanted.
-"""
 
 def Alg4_alpha(Niters,**p_alpha):
     """
@@ -358,24 +234,17 @@ def Alg4_alpha(Niters,**p_alpha):
             if k == 'a': #If it is a's
                 for i in range(len(v)):
                     new_element=np.random.normal(loc=p_alpha['a'][i],scale=a_sigma) #draw random sample from proposal distribution
-                    #p_prime=list(p_alpha)
                     p_prime=p_alpha.copy()
-                    #p_prime[i]=new_element
                     p_prime['a'][i]=new_element
                     #Likelihood
-                    #L1=Likelihood(p_alpha,V1,V2)
                     L1=Likelihood(**p_alpha)
-                    #L2=Likelihood(p_prime,V1,V2)
                     L2=Likelihood(**p_prime)
                     #Priors
                     #eta: mu=0.5,sigma=0.05
                     #a: uniform so N/A
                     #b: mu=0.7,sigma=0.07
-                    #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                     P1=uniform(p_alpha['a'][i])
                     P2=uniform(p_prime['a'][i])
-                    #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                    
                     #Candidates
                     g1= np.random.normal(p_alpha['a'][i],a_sigma)
                     g2=np.random.normal(p_prime['a'][i],a_sigma)
@@ -399,24 +268,17 @@ def Alg4_beta(Niters, **p_beta):
             if k == 'a': #If it is a's
                 for i in range(len(v)):
                     new_element=np.random.normal(loc=p_beta['a'][i],scale=a_sigma) #draw random sample from proposal distribution
-                    #p_prime=list(p_alpha)
                     p_prime=p_alpha.copy()
-                    #p_prime[i]=new_element
                     p_prime['a'][i]=new_element
                     #Likelihood
-                    #L1=Likelihood(p_alpha,V1,V2)
                     L1=Likelihood(**p_beta)
-                    #L2=Likelihood(p_prime,V1,V2)
                     L2=Likelihood(**p_prime)
                     #Priors
                     #eta: mu=0.5,sigma=0.05
                     #a: uniform so N/A
                     #b: mu=0.7,sigma=0.07
-                    #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                     P1=uniform(p_beta['a'][i])
-                    P2=uniform(p_prime['a'][i])
-                    #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                    
+                    P2=uniform(p_prime['a'][i])                    
                     #Candidates
                     g1= np.random.normal(p_beta['a'][i],a_sigma)
                     g2=np.random.normal(p_prime['a'][i],a_sigma)
@@ -430,24 +292,17 @@ def Alg4_beta(Niters, **p_beta):
             if k == 'b': #If it is b's
                 for i in range(len(v)):
                     new_element=np.random.normal(loc=p_beta['b'][i],scale=b_sigma) #draw random sample from proposal distribution
-                    #p_prime=list(p_alpha)
                     p_prime=p_alpha.copy()
-                    #p_prime[i]=new_element
                     p_prime['b'][i]=new_element
                     #Likelihood
-                    #L1=Likelihood(p_alpha,V1,V2)
                     L1=Likelihood(**p_alpha)
-                    #L2=Likelihood(p_prime,V1,V2)
                     L2=Likelihood(**p_prime)
                     #Priors
                     #eta: mu=0.5,sigma=0.05
                     #a: uniform so N/A
                     #b: mu=0.7,sigma=0.07
-                    #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                     P1=uniform(p_beta['b'][i])
                     P2=uniform(p_prime['b'][i])
-                    #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                    
                     #Candidates
                     g1= np.random.normal(p_beta['b'][i],b_sigma)
                     g2=np.random.normal(p_prime['b'][i],b_sigma)
@@ -460,7 +315,6 @@ def Alg4_beta(Niters, **p_beta):
                         p_beta=p_prime
     return p_beta
 
-#In this instantiation MCMC will be an array of dictionaries (with the V values popped out)
 def Alg4(Niters,Markov=False,ReturnAll=False,**p):
     """
     This Algorithm is the Metropolis-Hastings within Gibbs sampling algorithm that is 
@@ -476,24 +330,17 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
                 if k == 'eta': #If it is eta's
                     for i in range(len(v)):
                         new_element=np.random.normal(loc=p['eta'][i],scale=eta_sigma) #draw random sample from proposal distribution
-                        #p_prime=list(p_alpha)
                         p_prime=p.copy()
-                        #p_prime[i]=new_element
                         p_prime['eta'][i]=new_element
                         #Likelihood
-                        #L1=Likelihood(p_alpha,V1,V2)
                         L1=Likelihood(**p)
-                        #L2=Likelihood(p_prime,V1,V2)
                         L2=Likelihood(**p_prime)
                         #Priors
                         #eta: mu=0.5,sigma=0.05
                         #a: uniform so N/A
                         #b: mu=0.7,sigma=0.07
-                        #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                         P1=uniform(p['eta'][i])
                         P2=uniform(p_prime['eta'][i])
-                        #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                        
                         #Candidates
                         g1= np.random.normal(p['eta'][i],eta_sigma)
                         g2=np.random.normal(p_prime['eta'][i],eta_sigma)
@@ -507,24 +354,17 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
                 if k == 'a': #If it is a's
                     for i in range(len(v)):
                         new_element=np.random.normal(loc=p['a'][i],scale=a_sigma) #draw random sample from proposal distribution
-                        #p_prime=list(p_alpha)
                         p_prime=p.copy()
-                        #p_prime[i]=new_element
                         p_prime['a'][i]=new_element
                         #Likelihood
-                        #L1=Likelihood(p_alpha,V1,V2)
                         L1=Likelihood(**p)
-                        #L2=Likelihood(p_prime,V1,V2)
                         L2=Likelihood(**p_prime)
                         #Priors
                         #eta: mu=0.5,sigma=0.05
                         #a: uniform so N/A
                         #b: mu=0.7,sigma=0.07
-                        #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                         P1=uniform(p['a'][i])
                         P2=uniform(p_prime['a'][i])
-                        #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                        
                         #Candidates
                         g1= np.random.normal(p['a'][i],a_sigma)
                         g2=np.random.normal(p_prime['a'][i],a_sigma)
@@ -538,24 +378,17 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
                 if k == 'b': #If it is b's
                     for i in range(len(v)):
                         new_element=np.random.normal(loc=p['b'][i],scale=b_sigma) #draw random sample from proposal distribution
-                        #p_prime=list(p_alpha)
                         p_prime=p_alpha.copy()
-                        #p_prime[i]=new_element
                         p_prime['b'][i]=new_element
                         #Likelihood
-                        #L1=Likelihood(p_alpha,V1,V2)
                         L1=Likelihood(**p)
-                        #L2=Likelihood(p_prime,V1,V2)
                         L2=Likelihood(**p_prime)
                         #Priors
                         #eta: mu=0.5,sigma=0.05
                         #a: uniform so N/A
                         #b: mu=0.7,sigma=0.07
-                        #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                         P1=uniform(p['b'][i])
-                        P2=uniform(p_prime['b'][i])
-                        #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                        
+                        P2=uniform(p_prime['b'][i])                        
                         #Candidates
                         g1= np.random.normal(p['b'][i],b_sigma)
                         g2=np.random.normal(p_prime['b'][i],b_sigma)
@@ -580,9 +413,7 @@ def Alg5(Niters,**p_alpha):
     described at the top of page 98 in Alex Neville's thesis.
     """
     for n in range(Niters):
-        #print(p_alpha)
         p_prime=p_alpha.copy() #Need to use list, lesson learned after 4 years of coding
-        #print(p_prime)
         new=[np.random.uniform(low=-np.pi,high=np.pi) for i in range(len(p_alpha['a']))]
         p_prime['a']=new
         #Likelihood
@@ -592,13 +423,9 @@ def Alg5(Niters,**p_alpha):
         #eta: mu=0.5,sigma=0.05
         #a: uniform so N/A
         #b: mu=0.7,sigma=0.07
-        #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-        #P1=uniform(p_alpha[3])*uniform(p_alpha[4])
         P1=1
         for i in range(len(p_alpha['a'])):
             P1*=uniform(p_alpha['a'][i])
-        #P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-        #P2=uniform(p_prime[3])*uniform(p_prime[4])
         P2=1
         for i in range(len(p_prime['a'])):
             P2*=uniform(p_prime['a'][i])
@@ -628,9 +455,7 @@ def Alg6(Niters,**p_alpha):
                     #eta: mu=0.5,sigma=0.05
                     #a: uniform so N/A
                     #b: mu=0.7,sigma=0.07
-                    #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                     P1=uniform(p_alpha['a'][i])
-                    #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
                     P2=uniform(p_prime['a'][i])
                     numerator=L1*P1
                     denominator=L2*P2
@@ -649,34 +474,22 @@ def Alg7(Niters, **p_alpha):
     for n in range(Niters):
         x=np.random.choice(3,len(p_alpha['a']))
         q=[(x[i]-1)*np.pi for i in range(len(x))]
-        #print(q)
-        #Likelihood
         test=p_alpha.copy()
-        #print(test['a'])
-        #test[3]+=q[0]
         for i in range(len(test['a'])):
             test['a'][i]+=q[i]
-        #print(test['a'])
-        #test[4]+=q[1]
-        
+        #Likelihood
         L1=Likelihood(**test)
         L2=Likelihood(**p_alpha)
         #Priors
         #eta: mu=0.5,sigma=0.05
         #a: uniform so N/A
         #b: mu=0.7,sigma=0.07
-        #P1= normal(test[0],0.5,0.05)*normal(test[1],0.5,0.05)*normal(test[2],0.5,0.05)*uniform(test[3])*uniform(test[4])*normal(test[5],0.7,0.07)*normal(test[6],0.7,0.07) #Prior for p+q
-        #P1=uniform(test[3])*uniform(test[4])
         P1=1
         for i in range(len(test['a'])):
             P1*=uniform(test['a'][i])
-        #print(P1)
-        #P2= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-        #P2=uniform(p_alpha[3])*uniform(p_alpha[4])
         P2=1
         for i in range(len(p_alpha['a'])):
             P2*=uniform(p_alpha['a'][i])
-        #print(P2)
         #print(np.exp(L1))
         #print(P1)
         #print(np.exp(L2))
@@ -699,8 +512,7 @@ for i in range(I[0]): #step 2.2
     #print(p_alpha)
     #print("###step 2.2ii done###")
     #step 2.2iii
-    #p_alpha=Alg4(p_alpha, I[3]) #p_alpha is first p_alpha
-    p_alpha=Alg4_alpha(I[3],**p_alpha) #p_alpha is second p_alpha
+    p_alpha=Alg4_alpha(I[3],**p_alpha)
     #print(p_alpha)
     #print("###step 2.2iii done###")
     #step 2.2iv (and 2.2v)
@@ -708,33 +520,30 @@ for i in range(I[0]): #step 2.2
     #print(p_alpha)
     #print("###step 2.2iv done###")
 
-#p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],b_est,b_est] #step 2.3
-#p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],0.7,0.7]
 p_beta=p_alpha.copy()
 for i in range(len(p_beta['eta'])):
     p_beta['eta'][i]=0.5
 for i in range(len(p_beta['b'])):
     p_beta['b'][i]=0.7
-
-
-
 #print("p_beta initial is: {}".format(p_beta))
+
 #step 2.4
 p_beta=Alg4_beta(I[5],**p_beta)
 #print(p_beta)
 #print("###step 2.4 done###")
 
-#p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
+#step 2.5
 p_zero=p_beta.copy()
 for i in range(len(p_zero['eta'])):
     p_zero['eta'][i]=0.5
 #print("p_zero is: {}".format(p_zero))
+
 #step 2.6
 p_zero=Alg4(I[6], Markov=False,**p_zero)
 #print(p_zero)
 #print("###step 2.6 done###")
-
-p_conv=p_zero.copy() #step 2.7
+#step 2.7
+p_conv=p_zero.copy()
 #print("p_conv is: {}".format(p_conv))
 
 ###Main Markov Chain Generation###
@@ -745,6 +554,7 @@ chain=Alg4(I[7], Markov=True,**p_conv)
 end=time.time()
 
 print("runtime is {}".format(end-start))
+
 ###Parameter estimation###
 
 """
