@@ -162,9 +162,34 @@ with Model() as model:
     #pm.Potential("likelihood", Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
 
     #idata = sample(draws=int(1e5), chains=4,step=pm.Metropolis(), return_inferencedata=True,cores=1)
-    idata = sample(draws=int(1e5), chains=4, return_inferencedata=True,cores=1)
+    idata = sample(draws=int(1e3), chains=4, return_inferencedata=True,cores=1)
 ###################Bayesian analysis
-az.plot_trace(idata)
-az.plot_posterior(idata)
-az.summary(idata, round_to=2)
-az.plot_ess(idata)
+lines={"eta1":eta1_true,"eta2":eta2_true,"eta3":eta3_true,"b1":b1_true,"b2":b2_true,"a1":a1_true,"a2":a2_true}
+
+ax=az.plot_trace(idata)
+#ax[0,0].axvline(x=eta1_true)
+for i,(k,v) in enumerate(lines.items()):
+    ax[i,0].axvline(x=v,c="red")
+    ax[i,1].axhline(y=v,c="red")
+#az.plot_posterior(idata)
+#az.summary(idata, round_to=2)
+#az.plot_ess(idata)
+"""
+fig,ax=plt.subplots(7,2,squeeze=False)
+#az.plot_trace(idata,axes=ax)
+a = np.random.poisson(4, 1000)
+#az.plot_dist(a)
+#print(np.shape(axes[0]))
+for i,(k,v) in enumerate(lines.items()):
+    #axes[i,0].axvline(x=v,c="red")
+    #axes[i,1].axhline(y=v,c="red")
+    #az.plot_trace(idata,var_names=k,axes=axes[i,:])
+    #az.plot_dist(idata,var_names=k,axes=axes[i,0])
+    #az.plot_trace(idata,var_names=k, ax=axes[i,1])
+    #az.plot_dist(idata["eta1"], axes=axes)
+    #az.plot_dist(a,ax=ax[i])
+    az.plot_trace(idata,var_names=k,axes=ax[i,:])
+    #ax[i].axvline(x=v,c="red")
+    #axes[i,1].axhline(y=v,c="red")
+fig.tight_layout()
+"""

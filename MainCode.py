@@ -449,6 +449,7 @@ markov state number plot in the right column with a Plot() function.
 from scipy.stats import gaussian_kde
 
 names=["eta1","eta2","eta3","a1","a2","b1","b2"]
+trues=[eta1_true,eta2_true,eta3_true,a1_true,a2_true,b1_true,b2_true]
 
 def Plot(chain): #Chain should contain all necessary markov chain data
     """
@@ -466,14 +467,17 @@ def Plot(chain): #Chain should contain all necessary markov chain data
         evaluated=kde.evaluate(eval_points)
         evaluated/=sum(evaluated) #For normalisation
         axs[i,0].plot(eval_points,evaluated)
+        axs[i,0].axvline(x=trues[i],c="red")
         #Add axs polish like axes labelling
         axs[i,0].set_ylabel(str(names[i])) #Add label to show which parameter is which
         axs[i,1].plot(chain[:,i])
+        axs[i,1].axhline(y=trues[i],c="red")
         axs[i,1].set_xlabel("Markov chain State Number") #Aid understanding of Markov chain plot
     #fig.tight_layout()
     plt.show()
 
 chain=np.array(chain)
+#print(chain)
 Plot(chain)
 
 for i in range(len(p_conv)): #step 4
