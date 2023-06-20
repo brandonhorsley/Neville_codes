@@ -145,7 +145,8 @@ with Model() as model:
 
     #idata = sample(draws=int(1e5), chains=4,step=pm.Metropolis(), return_inferencedata=True,cores=1)    
     #idata = sample(draws=int(1e5), chains=4, return_inferencedata=True,cores=1)
-    idata = sample(draws=int(1e5), chains=1, return_inferencedata=True)
+    idata = sample(draws=int(1e3), chains=4, return_inferencedata=True,cores=1)
 
 ###################Bayesian analysis
 az.plot_trace(idata)
+az.summary(idata)
