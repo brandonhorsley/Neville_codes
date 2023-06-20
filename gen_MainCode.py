@@ -131,15 +131,15 @@ def constructU_from_p(etas,phis):
     U=np.eye(2)
     #print(etas)
     #print(phis)
-    BS_counter=0
-    PS_counter=0
+    BS_counter=-1
+    PS_counter=-1
     for i in range(len(totalorder)):
         if totalorder[-i]=='BS':
             U=U@construct_BS(etas[BS_counter])
-            BS_counter+=1
+            BS_counter-=1
         if totalorder[-i]=='PS':
             U=U@construct_PS(phis[PS_counter])
-            PS_counter+=1
+            PS_counter-=1
     return U
 
 Vmax=5
