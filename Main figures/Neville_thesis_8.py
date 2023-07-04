@@ -177,6 +177,6 @@ for i,(k,v) in enumerate(lines.items()):
 #az.plot_ess(idata)
 """
 
-#az.plot_trace(idata)
+az.plot_trace(idata)
 az.summary(idata)
 #az.plot_energy(idata)

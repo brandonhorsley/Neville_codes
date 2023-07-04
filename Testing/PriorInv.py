@@ -1,28 +1,53 @@
 """
-Code to implement the main parameter estimation procedure from Alex Neville's code which is described in 
-the entirety of chapter 4.3.4.
+This code file will be for investigating the impact of choice of priors on Alex's procedure and will be 
+following up on Anthony's suggestion about investigating choice of priors and it's impact on things like 
+convergence.
 
-I will keep it specific to the toy example case first and then generalise later.
+In this procedure the initial parameters are estimated so the choice of 'priors' are more the candidate proposals 
+in each of the sub algorithms which are mostly normal distributions. Well more specifically a candidate solution is 
+drawn and then that proposal informs the value for the prior, and this is done for varying different models so 
+there is a lot of rough experimentation to be done here since that means i have three codependent degrees of 
+freedom is candidate proposal to draw from, the prior, and the algorithm it is applied to.
 
-Current draft yields poor results, which i think is due to malfunctioning of sub algorithms.
+What is the impact of dissonance between the candidate proposal and prior i wonder?
 
-Through multiple iterations of troubleshooting i have managed to reel in answers into more reasonable  and 
-physical answers (so eta bounded between 0 and 1 and so on). I also learnt after 4 years of coding that you 
-can't just do a=b and then modify only a because it will change b too, so instead i need to do a=list(b).
+But before proceeding i suppose i should look at the figures of merit i am going to look at. The main thing i'd
+wager should be convergence, so i should polish my code to reflect that investigation. I believe Alex makes an 
+average error across multiple runs to generate a plot so that could be something to look at. I can also think 
+about maybe seeing if i can implement a more definitive measure of convergence in the probabilistic sense. 
 
-For further work it sounds like in the thesis he refers to randomly calibrating circuit using randomly 
-selecting eta values and a values and b values. But as my code is i am just using predefined true values for 
-eta, a and b that doesn't change. I can edit the code to implement this when i figure out why alex chose to 
-do that.
+If the domain explored in q [proposal] is too small, compared with the range of f (the target's distribution density)
+, the Markov Chain will have difficulties in exploring this range and will converge very slowly:
+-> support is the range of possible values that have nonzero prob
+https://stats.stackexchange.com/questions/360194/how-can-the-support-of-proposal-distribution-impact-convergence-of-rh-mh-algorit
 
-Alg4 where the Markov chain is being constructed seems to take the longest amount of time so if i can get as 
-much speedup as possible then that will be extremely useful.
+So it looks like one way of boosting convergence time is increasing the sd of the normal distribution. What about shape of support then i wonder?
+
+Proposal distribution and prior don't need to be the same:
+https://stats.stackexchange.com/questions/168298/is-that-ok-to-have-the-same-prior-and-proposal-distribution-in-mh
+
+List of distributions:
+https://www.pymc.io/projects/docs/en/stable/api/distributions.html
+
+Uniform
+Normal
+StudentT
+Polya Gamma?
+Moyal? (distribution is quite positively skewed)
+Laplace
+Gamma
+ExGaussian/exponentially modified gaussian log likelihood
 """
 
 import numpy as np
+import sys
+ 
+# adding Folder_2 to the system path
+sys.path.insert(0, '/Users/ck21395/PhD codes/Neville_codes')
 from Aux_Nev import *
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+from scipy.stats import rv_continuous
 
 """
 From Aux_Nev the true values:
@@ -56,10 +81,9 @@ def normal(x,mu,sigma):
     numerator = np.exp((-(x-mu)**2)/(2*sigma**2))
     denominator = sigma * np.sqrt(2*np.pi)
     return numerator/denominator
-"""
-def uniform(x):
-    return 1/(2*np.pi)
-"""
+
+#I can only apply uniform to eta and to a since they can only be bounded variables, b is an unbounded parameter 
+# and you can't have a flat distribution over unbounded space
 def uniform(p,lower, upper):
     if p>=lower and p<=upper:
         return 1/(upper-lower)
@@ -73,10 +97,32 @@ def random_coin(p):
     else:
         return False
 
+from scipy.special import gamma
+
+"""
+def StudentT(x,df,mu,sigma): #for when you know x (so in essence for defining the prior)
+    Y=(x-mu)/sigma
+    Z=abs(sigma)*np.sqrt(df*np.pi)*gamma(0.5*df)/gamma(0.5*(df+1))
+    return (1+Y**2/df)**(-0.5(df+1))/Z
+
+def StudentTcandidate(mu,sigma):
+    v=sigma**2
+    if v==1:
+        df=np.inf
+    else:
+        df=2*v/(v-1)
+    s=np.random.standard_t(df=df)
+    s+=mu
+    return s
+"""
+
+def StudentT(x,df): #for when you know x (so in essence for defining the prior)
+    return ((gamma((df+1)/2))/(np.sqrt(np.pi*df)*gamma(df/2)))*(1+(x**2)/df)**(-(df+1)/2)
+
 #eq 4.11: g_i(p',p)=Normal(p_i,sigma_i)
 #sigma_i=pi/200 for a, b_est for b, 0.005 for eta
 
-b_est=0.07
+b_est=0.07 
 """
 b_est is subject to change and consistency w. Aux_Nev should be certified, additionally sigma_i for b is 
 suggested it should be b_est but the actual estimated value is closer to 0.7 so there is confusion there.
@@ -88,7 +134,7 @@ b_sigma=b_est #Based around true values from Neville_thesis_8.py
 #N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,100]
+I=[2,500,50,50,500,100,100,100000]
 
 #I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
 #AKA divide I[-1] by 10 to get approx. runtime
@@ -103,7 +149,7 @@ print("runtime in hours is around {}hr".format(runtime/(3600)))
 
 ###Burn in###
 
-p_alpha=[0.5,0.5,0.5,0,0,0.7,0.7] #step 2.1
+p_alpha=[0.5,0.5,0.5,0,0,0.5,0.5] #step 2.1
 print("p_alpha initial is {}".format(p_alpha))
 #p_alpha=[0,0] #step 2.1
 
@@ -121,32 +167,36 @@ def Alg4_alpha(p_alpha, Niters):
         for i in range(len(p_alpha)):
             if i in [3,4]: #If it is a's
                 new_element=np.random.normal(loc=p_alpha[i],scale=a_sigma) #draw random sample from proposal distribution
-                if new_element>-np.pi and new_element<np.pi:
-                    p_prime=list(p_alpha)
-                    p_prime[i]=new_element
-                    #Likelihood
-                    L1=Likelihood(p_alpha,V1,V2)
-                    L2=Likelihood(p_prime,V1,V2)
-                    #Priors
-                    #eta: mu=0.5,sigma=0.05
-                    #a: uniform so N/A
-                    #b: mu=0.7,sigma=0.07
-                    #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-                    P1=uniform(p_alpha[i],-np.pi,np.pi)
-                    P2=uniform(p_prime[i],-np.pi,np.pi)
-                    #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                    #Candidates
-                    g1= np.random.normal(p_alpha[i],a_sigma)
-                    g2=np.random.normal(p_prime[i],a_sigma)
-                    numerator=L1*P1*g1
-                    denominator=L2*P2*g2
-                    elem=numerator/denominator
-                    T=min(1,elem)
-                    move_prob=random_coin(T)
-                    if move_prob:
-                        p_alpha=p_prime
-                else:
-                    p_alpha=p_alpha
+                #new_element=np.random.uniform(low=-np.pi,high=np.pi)
+                #new_element=scipy.stats.t(mu=p_alpha[i],df=(N-1))  #don't use until i figure out degrees of freedom for our context 
+                #new_element=p_alpha[i]+np.random.standard_t(df=(N-1))
+                p_prime=list(p_alpha)
+                p_prime[i]=new_element
+                #Likelihood
+                L1=Likelihood(p_alpha,V1,V2)
+                L2=Likelihood(p_prime,V1,V2)
+                #Priors
+                #eta: mu=0.5,sigma=0.05
+                #a: uniform so N/A
+                #b: mu=0.7,sigma=0.07
+                #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
+                #P1=uniform(p_alpha[i])
+                P1=uniform(p_alpha[i],-np.pi,np.pi)
+                #P1=StudentT(x=(new_element-p_alpha[i]),df=(N-1))
+                #P2=uniform(p_prime[i])
+                #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+                P2=uniform(p_alpha[i],-np.pi,np.pi)
+                #P1=StudentT(x=(new_element-p_prime[i]),df=(N-1))
+                #Candidates
+                g1= np.random.normal(p_alpha[i],a_sigma)
+                g2=np.random.normal(p_prime[i],a_sigma)
+                numerator=L1*P1*g1
+                denominator=L2*P2*g2
+                elem=numerator/denominator
+                T=min(1,elem)
+                move_prob=random_coin(T)
+                if move_prob:
+                    p_alpha=p_prime
 
     return p_alpha
 
@@ -159,34 +209,41 @@ def Alg4_beta(p_beta, Niters):
         for i in range(len(p_beta)):
             if i in [3,4]: #If it is a's
                 new_element=np.random.normal(loc=p_beta[i],scale=a_sigma) #draw random sample from proposal distribution
-                if new_element>-np.pi and new_element<np.pi:
-                    p_prime=list(p_beta)
-                    p_prime[i]=new_element
-                    #Likelihood
-                    L1=Likelihood(p_beta,V1,V2)
-                    L2=Likelihood(p_prime,V1,V2)
-                    #Priors
-                    #eta: mu=0.5,sigma=0.05
-                    #a: uniform so N/A
-                    #b: mu=0.7,sigma=0.07
-                    #P1= normal(p_beta[0],0.5,0.05)*normal(p_beta[1],0.5,0.05)*normal(p_beta[2],0.5,0.05)*uniform(p_beta[3])*uniform(p_beta[4])*normal(p_beta[5],0.7,0.07)*normal(p_beta[6],0.7,0.07) #Prior for p
-                    P1=uniform(p_beta[i],-np.pi,np.pi)
-                    P2=uniform(p_prime[i],-np.pi,np.pi)
-                    #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                    #Candidates
-                    g1= np.random.normal(p_beta[i],a_sigma)
-                    g2=np.random.normal(p_prime[i],a_sigma)
-                    numerator=L1*P1*g1
-                    denominator=L2*P2*g2
-                    elem=numerator/denominator
-                    T=min(1,elem)
-                    move_prob=random_coin(T)
-                    if move_prob:
-                        p_beta=p_prime
-                else:
-                    p_beta=p_beta
+                #new_element=np.random.uniform(low=-np.pi,high=np.pi)
+                #new_element=scipy.stats.t(mu=p_beta[i],df=(M-1))   #don't use until i figure out degrees of freedom for our context 
+                #new_element=p_beta[i]+np.random.standard_t(df=(N-1))
+                p_prime=list(p_beta)
+                p_prime[i]=new_element
+                #Likelihood
+                L1=Likelihood(p_beta,V1,V2)
+                L2=Likelihood(p_prime,V1,V2)
+                #Priors
+                #eta: mu=0.5,sigma=0.05
+                #a: uniform so N/A
+                #b: mu=0.7,sigma=0.07
+                #P1= normal(p_beta[0],0.5,0.05)*normal(p_beta[1],0.5,0.05)*normal(p_beta[2],0.5,0.05)*uniform(p_beta[3])*uniform(p_beta[4])*normal(p_beta[5],0.7,0.07)*normal(p_beta[6],0.7,0.07) #Prior for p
+                #P1=uniform(p_beta[i])
+                P1=uniform(p_beta[i],-np.pi,np.pi)
+                #P1=StudentT(x=(new_element-p_beta[i]),df=(N-1))
+                #P2=uniform(p_prime[i])
+                #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+                P2=uniform(p_prime[i],-np.pi,np.pi)
+                #P2=StudentT(x=(new_element-p_prime[i]),df=(N-1))
+                #Candidates
+                g1= np.random.normal(p_beta[i],a_sigma)
+                g2=np.random.normal(p_prime[i],a_sigma)
+                numerator=L1*P1*g1
+                denominator=L2*P2*g2
+                elem=numerator/denominator
+                T=min(1,elem)
+                move_prob=random_coin(T)
+                if move_prob:
+                    p_beta=p_prime
             if i in [5,6]: #If it is b's
                 new_element=np.random.normal(loc=p_beta[i],scale=b_sigma) #draw random sample from proposal distribution
+                #new_element=np.random.uniform(low=-np.pi,high=np.pi) #Not sure on range since b can be unbounded
+                #new_element=scipy.stats.t(mu=p_beta[i],df=(M-1))   #don't use until i figure out degrees of freedom for our context 
+                #new_element=p_beta[i]+np.random.standard_t(df=(N-1))
                 p_prime=list(p_beta)
                 p_prime[i]=new_element
                 #Likelihood
@@ -198,8 +255,10 @@ def Alg4_beta(p_beta, Niters):
                 #b: mu=0.7,sigma=0.07
                 #P1= normal(p_beta[0],0.5,0.05)*normal(p_beta[1],0.5,0.05)*normal(p_beta[2],0.5,0.05)*uniform(p_beta[3])*uniform(p_beta[4])*normal(p_beta[5],0.7,0.07)*normal(p_beta[6],0.7,0.07) #Prior for p_beta
                 P1=normal(p_beta[i],0.7,0.07)
+                #P1=StudentT(x=(new_element-p_beta[i]),df=(N-1))
                 #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p_beta'
                 P2=normal(p_prime[i],0.7,0.07)
+                #P2=StudentT(x=(new_element-p_prime[i]),df=(N-1))
                 #Candidates
                 g1= np.random.normal(p_beta[i],b_sigma) 
                 g2=np.random.normal(p_prime[i],b_sigma)
@@ -226,64 +285,69 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
             for i in range(len(p)):
                 if i in [0,1,2]: #If it is eta's
                     new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
-                    if new_element>0 and new_element<1:
-                        p_prime=list(p)
-                        p_prime[i]=new_element
-                        #Likelihood
-                        L1=Likelihood(p,V1,V2)
-                        L2=Likelihood(p_prime,V1,V2)
-                        #Priors
-                        #eta: mu=0.5,sigma=0.05
-                        #a: uniform so N/A
-                        #b: mu=0.7,sigma=0.07
-                        #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-                        P1=normal(p[i],0.5,eta_sigma)
-                        #print(p[i])
-                        #print(P1)
-                        #P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                        P2=normal(p_prime[i],0.5,eta_sigma)
-                        #print(p_prime[i])
-                        #print(P2)
-                        #Candidates
-                        g1= np.random.normal(p[i],eta_sigma)
-                        g2=np.random.normal(p_prime[i],eta_sigma)
-                        elem=(np.exp(L1)*P1*g1)/(np.exp(L2)*P2*g2)
-                        T=min(1,elem)
-                        move_prob=random_coin(T)
-                        if move_prob:
-                            p=p_prime
-                    else: #AKA if eta value is out of bounds
-                        p=p
+                    #new_element=np.random.uniform(low=0,high=1)
+                    #new_element=scipy.stats.t(mu=p[i],df=(M-1))   #don't use until i figure out degrees of freedom for our context 
+                    new_element=p[i]+np.random.standard_t(df=(N-1))
+                    p_prime=list(p)
+                    p_prime[i]=new_element
+                    #Likelihood
+                    L1=Likelihood(p,V1,V2)
+                    L2=Likelihood(p_prime,V1,V2)
+                    #Priors
+                    #eta: mu=0.5,sigma=0.05
+                    #a: uniform so N/A
+                    #b: mu=0.7,sigma=0.07
+                    #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+                    P1=normal(p[i],0.5,0.05)
+                    #P1=StudentT(x=(new_element-p[i]),df=(N-1))
+                    #P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+                    P2=normal(p_prime[i],0.5,0.05)
+                    #P2=StudentT(x=(new_element-p_prime[i]),df=(N-1))
+                    #Candidates
+                    g1= np.random.normal(p[i],eta_sigma)
+                    g2=np.random.normal(p_prime[i],eta_sigma)
+                    elem=(np.exp(L1)*P1*g1)/(np.exp(L2)*P2*g2)
+                    T=min(1,elem)
+                    move_prob=random_coin(T)
+                    if move_prob:
+                        p=p_prime
                 if i in [3,4]: #If it is a's
                     new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
-                    if new_element>-np.pi and new_element<np.pi:
-                        p_prime=list(p)
-                        p_prime[i]=new_element
-                        #Likelihood
-                        L1=Likelihood(p,V1,V2)
-                        L2=Likelihood(p_prime,V1,V2)
-                        #Priors
-                        #eta: mu=0.5,sigma=0.05
-                        #a: uniform so N/A
-                        #b: mu=0.7,sigma=0.07
-                        #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-                        P1=uniform(p[i],-np.pi,np.pi)
-                        #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                        P2=uniform(p_prime[i],-np.pi,np.pi)
-                        #Candidates
-                        g1= np.random.normal(p[i],a_sigma)
-                        g2=np.random.normal(p_prime[i],a_sigma)
-                        numerator=L1*P1*g1
-                        denominator=L2*P2*g2
-                        elem=numerator/denominator
-                        T=min(1,elem)
-                        move_prob=random_coin(T)
-                        if move_prob:
-                            p=p_prime
-                    else:
-                        p=p
+                    #new_element=np.random.uniform(low=-np.pi,high=np.pi)
+                    #new_element=scipy.stats.t(mu=p[i],df=(M-1))   #don't use until i figure out degrees of freedom for our context 
+                    #new_element=p[i]+np.random.standard_t(df=(N-1))
+                    p_prime=list(p)
+                    p_prime[i]=new_element
+                    #Likelihood
+                    L1=Likelihood(p,V1,V2)
+                    L2=Likelihood(p_prime,V1,V2)
+                    #Priors
+                    #eta: mu=0.5,sigma=0.05
+                    #a: uniform so N/A
+                    #b: mu=0.7,sigma=0.07
+                    #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
+                    #P1=uniform(p[i])
+                    P1=uniform(p[i],-np.pi,np.pi)
+                    #P1=StudentT(x=(new_element-p[i]),df=(N-1))
+                    #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
+                    #P2=uniform(p_prime[i])
+                    P2=uniform(p[i],-np.pi,np.pi)
+                    #P2=StudentT(x=(new_element-p_prime[i]),df=(N-1))
+                    #Candidates
+                    g1= np.random.normal(p[i],a_sigma)
+                    g2=np.random.normal(p_prime[i],a_sigma)
+                    numerator=L1*P1*g1
+                    denominator=L2*P2*g2
+                    elem=numerator/denominator
+                    T=min(1,elem)
+                    move_prob=random_coin(T)
+                    if move_prob:
+                        p=p_prime
                 if i in [5,6]: #If it is b's
                     new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
+                    #new_element=np.random.uniform(low=-np.pi,high=np.pi)
+                    #new_element=scipy.stats.t(mu=p[i],df=(M-1))   #don't use until i figure out degrees of freedom for our context 
+                    #new_element=p[i]+np.random.standard_t(df=(N-1))
                     p_prime=list(p)
                     p_prime[i]=new_element
                     #Likelihood
@@ -295,8 +359,10 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     #b: mu=0.7,sigma=0.07
                     #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
                     P1=normal(p[i],0.7,0.07)
+                    #P1=StudentT(x=(new_element-p[i]),df=(N-1))
                     #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
                     P2=normal(p_prime[i],0.7,0.07)
+                    #P2=StudentT(x=(new_element-p_prime[i]),df=(N-1))
                     #Candidates
                     g1= np.random.normal(p[i],b_sigma) 
                     g2=np.random.normal(p_prime[i],b_sigma)
@@ -354,6 +420,9 @@ def Alg6(p_alpha,Niters):
         for i in range(len(p_alpha)):
             if i in [3,4]: #If it is a's
                 new_element=np.random.uniform(low=-np.pi,high=np.pi)
+                #new_element=np.random.normal()
+                #new_element=scipy.stats.t(mu=p_alpha[i],df=(M-1)) #don't use until i figure out degrees of freedom for our context 
+                #new_element=p_alpha[i]+np.random.standard_t(df=(N-1))
                 p_prime=list(p_alpha)
                 p_prime[i]=new_element
                 #Likelihood
@@ -365,8 +434,10 @@ def Alg6(p_alpha,Niters):
                 #b: mu=0.7,sigma=0.07
                 #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
                 P1=uniform(p_alpha[i],-np.pi,np.pi)
+                #P1=StudentT(x=(new_element-p_alpha[i]),df=(N-1))
                 #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
                 P2=uniform(p_prime[i],-np.pi,np.pi)
+                #P2=StudentT(x=(new_element-p_prime[i]),df=(N-1))
                 numerator=L1*P1
                 denominator=L2*P2
                 elem=numerator/denominator
@@ -387,7 +458,6 @@ def Alg7(p_alpha, Niters):
         q=[(x[i]-1)*np.pi for i in range(len(x))]
         #Likelihood
         #print(q)
-        #print(p_alpha)
         test=list(p_alpha)
         test[3]+=q[0]
         test[4]+=q[1]
@@ -404,16 +474,11 @@ def Alg7(p_alpha, Niters):
         #P2= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
         P2=uniform(p_alpha[3],-np.pi,np.pi)*uniform(p_alpha[4],-np.pi,np.pi)
         #print(P2)
-        #print(np.exp(L1)) #not fine
-        #print(L1)
-        #print(P1) #fine
-        #print(np.exp(L2)) #not fine
-        #print(L2)
-        #print(P2) #fine
-        #print("leq is: {}".format(np.exp(L1)*P1)) #both eqs seem to keep coming out as zero
-        #print("req is: {}".format(np.exp(L2)*P2))
-        #if (np.exp(L1)*P1)>(np.exp(L2)*P2):
-        if (L1+np.log(P1))>(L2+np.log(P2)):
+        #print(np.exp(L1))
+        #print(P1)
+        #print(np.exp(L2))
+        #print(P2)
+        if (np.exp(L1)*P1)>(np.exp(L2)*P2):
             p_alpha=test
     return p_alpha
 
@@ -433,9 +498,6 @@ for i in range(I[0]): #step 2.2
     p_alpha=Alg4_alpha(p_alpha, I[3]) #p_alpha is second p_alpha
     print(p_alpha)
     print("###step 2.2iii done###")
-    #print("###################################################")
-    #print("Diagnostics")
-    #print("###################################################")
     #step 2.2iv (and 2.2v)
     p_alpha=Alg7(p_alpha,I[4])
     print(p_alpha)
@@ -452,16 +514,12 @@ print("###step 2.4 done###")
 
 p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
 print("p_zero is: {}".format(p_zero))
-
 #step 2.6
-print("###################################################")
-print("Diagnostics")
-print("###################################################")
 p_zero=Alg4(p_zero,I[6], Markov=False)
 print(p_zero)
 print("###step 2.6 done###")
 
-p_conv=list(p_zero) #step 2.7
+p_conv=p_zero #step 2.7
 print("p_conv is: {}".format(p_conv))
 
 
