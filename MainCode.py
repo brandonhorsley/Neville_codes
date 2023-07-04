@@ -56,9 +56,15 @@ def normal(x,mu,sigma):
     numerator = np.exp((-(x-mu)**2)/(2*sigma**2))
     denominator = sigma * np.sqrt(2*np.pi)
     return numerator/denominator
-
+"""
 def uniform(x):
     return 1/(2*np.pi)
+"""
+def uniform(p,lower, upper):
+    if p>=lower and p<=upper:
+        return 1/(upper-lower)
+    else:
+        return 0
 
 def random_coin(p):
     unif = np.random.uniform(0,1)
@@ -70,7 +76,7 @@ def random_coin(p):
 #eq 4.11: g_i(p',p)=Normal(p_i,sigma_i)
 #sigma_i=pi/200 for a, b_est for b, 0.005 for eta
 
-b_est=0.07 
+b_est=0.07
 """
 b_est is subject to change and consistency w. Aux_Nev should be certified, additionally sigma_i for b is 
 suggested it should be b_est but the actual estimated value is closer to 0.7 so there is confusion there.
@@ -82,7 +88,7 @@ b_sigma=b_est #Based around true values from Neville_thesis_8.py
 #N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,1000]
+I=[2,500,50,50,500,100,100,100000]
 
 #I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
 #AKA divide I[-1] by 10 to get approx. runtime
@@ -97,7 +103,7 @@ print("runtime in hours is around {}hr".format(runtime/(3600)))
 
 ###Burn in###
 
-p_alpha=[0.5,0.5,0.5,0,0,0.5,0.5] #step 2.1
+p_alpha=[0.5,0.5,0.5,0,0,0.7,0.7] #step 2.1
 print("p_alpha initial is {}".format(p_alpha))
 #p_alpha=[0,0] #step 2.1
 
@@ -125,10 +131,9 @@ def Alg4_alpha(p_alpha, Niters):
                 #a: uniform so N/A
                 #b: mu=0.7,sigma=0.07
                 #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-                P1=uniform(p_alpha[i])
-                P2=uniform(p_prime[i])
+                P1=uniform(p_alpha[i],-np.pi,np.pi)
+                P2=uniform(p_prime[i],-np.pi,np.pi)
                 #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                
                 #Candidates
                 g1= np.random.normal(p_alpha[i],a_sigma)
                 g2=np.random.normal(p_prime[i],a_sigma)
@@ -161,8 +166,8 @@ def Alg4_beta(p_beta, Niters):
                 #a: uniform so N/A
                 #b: mu=0.7,sigma=0.07
                 #P1= normal(p_beta[0],0.5,0.05)*normal(p_beta[1],0.5,0.05)*normal(p_beta[2],0.5,0.05)*uniform(p_beta[3])*uniform(p_beta[4])*normal(p_beta[5],0.7,0.07)*normal(p_beta[6],0.7,0.07) #Prior for p
-                P1=uniform(p_beta[i])
-                P2=uniform(p_prime[i])
+                P1=uniform(p_beta[i],-np.pi,np.pi)
+                P2=uniform(p_prime[i],-np.pi,np.pi)
                 #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
                 #Candidates
                 g1= np.random.normal(p_beta[i],a_sigma)
@@ -225,9 +230,13 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     #a: uniform so N/A
                     #b: mu=0.7,sigma=0.07
                     #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-                    P1=normal(p[i],0.5,0.05)
+                    P1=normal(p[i],0.5,eta_sigma)
+                    print(p[i])
+                    print(P1)
                     #P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                    P2=normal(p_prime[i],0.5,0.05)
+                    P2=normal(p_prime[i],0.5,eta_sigma)
+                    print(p_prime[i])
+                    print(P2)
                     #Candidates
                     g1= np.random.normal(p[i],eta_sigma)
                     g2=np.random.normal(p_prime[i],eta_sigma)
@@ -248,9 +257,9 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     #a: uniform so N/A
                     #b: mu=0.7,sigma=0.07
                     #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
-                    P1=uniform(p[i])
+                    P1=uniform(p[i],-np.pi,np.pi)
                     #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                    P2=uniform(p_prime[i])
+                    P2=uniform(p_prime[i],-np.pi,np.pi)
                     #Candidates
                     g1= np.random.normal(p[i],a_sigma)
                     g2=np.random.normal(p_prime[i],a_sigma)
@@ -314,9 +323,9 @@ def Alg5(p_alpha,Niters):
         #a: uniform so N/A
         #b: mu=0.7,sigma=0.07
         #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-        P1=uniform(p_alpha[3])*uniform(p_alpha[4])
+        P1=uniform(p_alpha[3],-np.pi,np.pi)*uniform(p_alpha[4],-np.pi,np.pi)
         #P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-        P2=uniform(p_prime[3])*uniform(p_prime[4])
+        P2=uniform(p_prime[3],-np.pi,np.pi)*uniform(p_prime[4],-np.pi,np.pi)
         elem=(np.exp(L1)*P1)/(np.exp(L2)*P2)
         T=min(1,elem)
         move_prob=random_coin(T)
@@ -343,9 +352,9 @@ def Alg6(p_alpha,Niters):
                 #a: uniform so N/A
                 #b: mu=0.7,sigma=0.07
                 #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-                P1=uniform(p_alpha[i])
+                P1=uniform(p_alpha[i],-np.pi,np.pi)
                 #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
-                P2=uniform(p_prime[i])
+                P2=uniform(p_prime[i],-np.pi,np.pi)
                 numerator=L1*P1
                 denominator=L2*P2
                 elem=numerator/denominator
@@ -366,6 +375,7 @@ def Alg7(p_alpha, Niters):
         q=[(x[i]-1)*np.pi for i in range(len(x))]
         #Likelihood
         #print(q)
+        #print(p_alpha)
         test=list(p_alpha)
         test[3]+=q[0]
         test[4]+=q[1]
@@ -377,16 +387,21 @@ def Alg7(p_alpha, Niters):
         #a: uniform so N/A
         #b: mu=0.7,sigma=0.07
         #P1= normal(test[0],0.5,0.05)*normal(test[1],0.5,0.05)*normal(test[2],0.5,0.05)*uniform(test[3])*uniform(test[4])*normal(test[5],0.7,0.07)*normal(test[6],0.7,0.07) #Prior for p+q
-        P1=uniform(test[3])*uniform(test[4])
+        P1=uniform(test[3],-np.pi,np.pi)*uniform(test[4],-np.pi,np.pi)
         #print(P1)
         #P2= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-        P2=uniform(p_alpha[3])*uniform(p_alpha[4])
+        P2=uniform(p_alpha[3],-np.pi,np.pi)*uniform(p_alpha[4],-np.pi,np.pi)
         #print(P2)
-        #print(np.exp(L1))
-        #print(P1)
-        #print(np.exp(L2))
-        #print(P2)
-        if (np.exp(L1)*P1)>(np.exp(L2)*P2):
+        #print(np.exp(L1)) #not fine
+        #print(L1)
+        #print(P1) #fine
+        #print(np.exp(L2)) #not fine
+        #print(L2)
+        #print(P2) #fine
+        #print("leq is: {}".format(np.exp(L1)*P1)) #both eqs seem to keep coming out as zero
+        #print("req is: {}".format(np.exp(L2)*P2))
+        #if (np.exp(L1)*P1)>(np.exp(L2)*P2):
+        if (L1+np.log(P1))>(L2+np.log(P2)):
             p_alpha=test
     return p_alpha
 
@@ -406,6 +421,9 @@ for i in range(I[0]): #step 2.2
     p_alpha=Alg4_alpha(p_alpha, I[3]) #p_alpha is second p_alpha
     print(p_alpha)
     print("###step 2.2iii done###")
+    #print("###################################################")
+    #print("Diagnostics")
+    #print("###################################################")
     #step 2.2iv (and 2.2v)
     p_alpha=Alg7(p_alpha,I[4])
     print(p_alpha)
@@ -422,12 +440,16 @@ print("###step 2.4 done###")
 
 p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
 print("p_zero is: {}".format(p_zero))
+
 #step 2.6
+print("###################################################")
+print("Diagnostics")
+print("###################################################")
 p_zero=Alg4(p_zero,I[6], Markov=False)
 print(p_zero)
 print("###step 2.6 done###")
 
-p_conv=p_zero #step 2.7
+p_conv=list(p_zero) #step 2.7
 print("p_conv is: {}".format(p_conv))
 
 
