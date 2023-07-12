@@ -83,12 +83,15 @@ suggested it should be b_est but the actual estimated value is closer to 0.7 so 
 """
 
 eta_sigma=0.005
+#eta_sigma=5
 a_sigma=np.pi/200
+#a_sigma=5
 b_sigma=b_est #Based around true values from Neville_thesis_8.py
+#b_sigma=5
 #N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,100]
+I=[2,500,50,50,500,100,100,100000]
 
 #I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
 #AKA divide I[-1] by 10 to get approx. runtime
@@ -222,6 +225,7 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
         return MCMC
     else: #If Markov==False
         MCMC=[]
+        AP=[]
         for n in range(Niters):
             for i in range(len(p)):
                 if i in [0,1,2]: #If it is eta's
@@ -251,8 +255,10 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                         T=min(1,elem)
                         move_prob=random_coin(T)
                         if move_prob:
+                            AP.append(move_prob)
                             p=p_prime
                     else: #AKA if eta value is out of bounds
+                        AP.append(False)
                         p=p
                 if i in [3,4]: #If it is a's
                     new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
@@ -279,8 +285,10 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                         T=min(1,elem)
                         move_prob=random_coin(T)
                         if move_prob:
+                            AP.append(move_prob)
                             p=p_prime
                     else:
+                        AP.append(False)
                         p=p
                 if i in [5,6]: #If it is b's
                     new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
@@ -306,10 +314,15 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     T=min(1,elem)
                     move_prob=random_coin(T)
                     if move_prob:
+                        AP.append(move_prob)
                         p=p_prime
+                    else:
+                        AP.append(move_prob)
+                        p=p
             if ReturnAll:
                 MCMC.append(p)
-
+        print("AP is")
+        print(sum(AP)/len(AP))
         if ReturnAll:
             return MCMC
         else:
@@ -433,9 +446,6 @@ for i in range(I[0]): #step 2.2
     p_alpha=Alg4_alpha(p_alpha, I[3]) #p_alpha is second p_alpha
     print(p_alpha)
     print("###step 2.2iii done###")
-    #print("###################################################")
-    #print("Diagnostics")
-    #print("###################################################")
     #step 2.2iv (and 2.2v)
     p_alpha=Alg7(p_alpha,I[4])
     print(p_alpha)
@@ -454,9 +464,6 @@ p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
 print("p_zero is: {}".format(p_zero))
 
 #step 2.6
-print("###################################################")
-print("Diagnostics")
-print("###################################################")
 p_zero=Alg4(p_zero,I[6], Markov=False)
 print(p_zero)
 print("###step 2.6 done###")

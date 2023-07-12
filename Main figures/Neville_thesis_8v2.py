@@ -255,7 +255,8 @@ with pm.Model() as model_multinomial:
     #a2= pm.Normal("a2", mu=0, sigma=np.pi/200,initval=0)
     b1= pm.Normal("b1", mu=0.7, sigma=0.07,initval=0.5)
     b2= pm.Normal("b2", mu=0.7, sigma=0.07,initval=0.5)
-
+    
+    
     counts = pm.Multinomial("counts", n=C, p=P, shape=(N, M), observed=data)
 
 with model_multinomial:

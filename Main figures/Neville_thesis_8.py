@@ -34,8 +34,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import pymc as pm
-
+import pytensor.tensor as at
 from pymc import Model, Normal, Uniform,Multinomial,Metropolis,sample
+
+from pytensor.compile.ops import as_op
 
 print(f"Running on PyMC v{pm.__version__}")
 
@@ -123,6 +125,7 @@ data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 #print(C)
 
 def Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,Voltages):
+    #@as_op(itypes=[at.dscalar, at.dscalar, at.dscalar,at.dscalar, at.dscalar, at.dscalar, at.dscalar, at.dvector],otypes=[at.dvector])
     #To be called after data generation
     P=np.empty((N,M))
     prob=np.empty(N)
@@ -141,8 +144,8 @@ def Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,Voltages):
         #prob[i]=scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P)
         #print(np.sum(prob))
         #return prob
-        print(P)
-        return P
+    print(P)
+    return P
 
 ############################Model
 
@@ -159,10 +162,19 @@ with Model() as model:
 
     #likelihood = Multinomial("likelihood", n=C, p=Likelihood, shape=(N,M), observed=data)
     likelihood = Multinomial("likelihood", n=C, p=Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
+    #p=pm.Deterministic("p", Likelihood*(eta1,eta2,eta3,a1,a2,b1,b2,V))
+    #likelihood=Multinomial("likelihood", n=C, p=p, shape=(N,M), observed=data)
     #pm.Potential("likelihood", Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), shape=(N,M), observed=data)
 
     #idata = sample(draws=int(1e5), chains=4,step=pm.Metropolis(), return_inferencedata=True,cores=1)
-    idata = sample(draws=int(1e3), chains=4, return_inferencedata=True,cores=1)
+    step=pm.CompoundStep([pm.Metropolis([a1,a2],S=np.pi/200,proposal_dist=Normal),
+                         pm.Metropolis([a1,a2,b1,b2]),
+                         pm.Metropolis([eta1,eta2,eta3,a1,a2,b1,b2]),
+                         ])
+    
+    idata = sample(draws=int(1e6), chains=2, return_inferencedata=True,cores=1,step=step)
+    #idata = sample(draws=int(1e3), return_inferencedata=True,cores=1)
+
 ###################Bayesian analysis
 """
 lines={"eta1":eta1_true,"eta2":eta2_true,"eta3":eta3_true,"b1":b1_true,"b2":b2_true,"a1":a1_true,"a2":a2_true}
