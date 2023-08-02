@@ -38,6 +38,7 @@ import scipy as sp
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+
 sns.set()
 #Posterior we want to sample from
 f = lambda x, y: np.exp(-(x*x*y*y+x*x+y*y-8*x-8*y)/2.)

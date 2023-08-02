@@ -55,6 +55,6 @@ def gaussian_mcmc(hops,mu,sigma):
 lines = np.linspace(-3,3,1000) #x array
 normal_curve = [normal(l,mu=0,sigma=1) for l in lines] #True plot
 dist = gaussian_mcmc(100_000,mu=0,sigma=1) #Sampling
-plt.hist(dist,normed=1,bins=20) #Showing sampling
+plt.hist(dist,density=True,bins=20) #Showing sampling
 plt.plot(lines,normal_curve) #Showing true plot
 

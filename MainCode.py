@@ -2,29 +2,40 @@
 Code to implement the main parameter estimation procedure from Alex Neville's code which is described in 
 the entirety of chapter 4.3.4.
 
-I will keep it specific to the toy example case first and then generalise later.
+This code is specific to the toy example case first, gen_MainCode's are generalised variants.
 
-Current draft yields poor results, which i think is due to malfunctioning of sub algorithms.
-
-Through multiple iterations of troubleshooting i have managed to reel in answers into more reasonable  and 
-physical answers (so eta bounded between 0 and 1 and so on). I also learnt after 4 years of coding that you 
-can't just do a=b and then modify only a because it will change b too, so instead i need to do a=list(b).
+Current stage of troubleshooting means i have imposed proper bounds on parameter values but the MCMC exploration 
+seems to not work well (high serial autocorrelation, see: 
+https://www.statlect.com/fundamentals-of-statistics/Markov-Chain-Monte-Carlo-diagnostics#:~:text=The%20simplest%20way%20to%20diagnose,results%20on%20all%20the%20chunks.)
+This needs to be done via either increasing number of chain samples and/or tune standard deviation of proposal 
+distributions for a better random walk. But in order to do this i shall have to change the recommended values from 
+his thesis which seems strange but i can't find any error in the implementation of the subalgorithms...
 
 For further work it sounds like in the thesis he refers to randomly calibrating circuit using randomly 
 selecting eta values and a values and b values. But as my code is i am just using predefined true values for 
-eta, a and b that doesn't change. I can edit the code to implement this when i figure out why alex chose to 
-do that.
+eta, a and b that doesn't change. I can edit the code to implement this as a benchmarking visual.
 
-Alg4 where the Markov chain is being constructed seems to take the longest amount of time so if i can get as 
-much speedup as possible then that will be extremely useful.
+Alg4 where the Markov chain is being construted takes the most time but it seems very nontrivial to speedup. 
+So am making do for the time being.
 """
 
 import numpy as np
-from Aux_Nev import *
+from Aux_Nev import * 
 import matplotlib.pyplot as plt
 
-
 """
+This early version of my code has me making use of the Aux_Nev file that has some of the useful functions and 
+values defined so changing them needs to be done in Aux_Nev.py, inconvenient but also helped stop the code running 
+on too long and being confusing. This was dealt with when i went with my gen_MainCode developments.
+
+Aux_Nev defines the following functions:
+Construct_BS
+Construct_PS
+ConstructU
+DataGen
+Likelihood -> Note that this returns a sum of log probabilities such that the transition rules work and likelihoods aren't so small that they get rounded to zero
+
+
 From Aux_Nev the true values:
 
 Vmax=5
@@ -44,22 +55,27 @@ b2_true=0.711
 eta1_true=0.447
 eta2_true=0.548
 eta3_true=0.479
-
-Likelihood and DataGen functions come from Aux_Nev.py
 """
-#Data generation (step 1) stuff is all contained in Aux_Nev so i will leave it that way for now for readability 
+
+#Data generation (step 1 of Alex's protocol) stuff is all contained in Aux_Nev so i will leave it that way for now for readability 
 #but if i need differed functionality then i can bring the code into this code document.
 
 ###Preliminaries###
+"""
+Here i define a bunch of functions defining the distributions used in the subalgorithms later.
+
+normal gets the probability for a value 'x' under a normal distribution of mean 'mu' and standard deviation 'sigma'.
+uniform gets the probability of value 'p' where the uniform distribution is bounded between 'lower' and 'upper'. This 
+    function checks that p is between upper and lower otherwise the probability will be zero.
+random_coin is used for the acceptance rule in the subalgorithms, where we have a probability of transitioning to 
+    the new state and this function is that act of rolling that die to determine whether you actually make that move.
+"""
 
 def normal(x,mu,sigma):
     numerator = np.exp((-(x-mu)**2)/(2*sigma**2))
     denominator = sigma * np.sqrt(2*np.pi)
     return numerator/denominator
-"""
-def uniform(x):
-    return 1/(2*np.pi)
-"""
+
 def uniform(p,lower, upper):
     if p>=lower and p<=upper:
         return 1/(upper-lower)
@@ -73,32 +89,26 @@ def random_coin(p):
     else:
         return False
 
-#eq 4.11: g_i(p',p)=Normal(p_i,sigma_i)
+#eq 4.11: g_i(p',p)=Normal(p_i,sigma_i) #proposal distribution
 #sigma_i=pi/200 for a, b_est for b, 0.005 for eta
 
-b_est=0.07
-"""
-b_est is subject to change and consistency w. Aux_Nev should be certified, additionally sigma_i for b is 
-suggested it should be b_est but the actual estimated value is closer to 0.7 so there is confusion there.
-"""
+#CAVEAT
+# Note with regard to the above standard deviations for the proposal distributions for the different parameter 
+# types is that there is some confusion with b_sigma. On page 94, it suggests that b_sigma should be b_est for 
+# which given my choice of 'true values' based around the example true value shown in Figure 4.7 which is ~0.7. 
+# However, on page 104 it says that the sigma for b's proposal distribution is 0.07. So it could just be a typo 
+# but there is ambiguity there. Switching between b_sigma being 0.7 or 0.07 is something i think i checked but 
+# haven't recently.
 
+b_est=0.7
 eta_sigma=0.005
-#eta_sigma=5
 a_sigma=np.pi/200
-#a_sigma=5
 b_sigma=b_est #Based around true values from Neville_thesis_8.py
-#b_sigma=5
-#N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,100000]
+I=[2,500,50,50,500,100,100,1000] #Smaller MCMC chain for troubleshooting
 
-#I[-1]=1 iteration takes 0.08s,10 takes 0.8 so 100,000 should take ~10,000s=~1667min=~27 hours=~1.15 days
-#AKA divide I[-1] by 10 to get approx. runtime
-# Numba tend to boast an order or two orders of magnitude speedup in general (with caveats ofc)
-# 1 order of magnitude:  ~1000s=~16-17mins
-# 2 orders of magnitude: ~100s=~1-2 mins
-
+#Runtime estimate
 runtime=(I[-1]/10)+60
 print("runtime in seconds is around {}s".format(runtime))
 print("runtime in minutes is around {}min".format(runtime/60))
@@ -108,7 +118,6 @@ print("runtime in hours is around {}hr".format(runtime/(3600)))
 
 p_alpha=[0.5,0.5,0.5,0,0,0.7,0.7] #step 2.1
 print("p_alpha initial is {}".format(p_alpha))
-#p_alpha=[0,0] #step 2.1
 
 """
 Defining Algorithms from thesis. Have done other documents that implement them but i 
@@ -124,9 +133,9 @@ def Alg4_alpha(p_alpha, Niters):
         for i in range(len(p_alpha)):
             if i in [3,4]: #If it is a's
                 new_element=np.random.normal(loc=p_alpha[i],scale=a_sigma) #draw random sample from proposal distribution
-                if new_element>-np.pi and new_element<np.pi:
-                    p_prime=list(p_alpha)
-                    p_prime[i]=new_element
+                if new_element>-np.pi and new_element<np.pi: #enforcing bound on 'a' value
+                    p_prime=list(p_alpha) 
+                    p_prime[i]=new_element #new proposed state
                     #Likelihood
                     L1=Likelihood(p_alpha,V1,V2)
                     L2=Likelihood(p_prime,V1,V2)
@@ -135,20 +144,20 @@ def Alg4_alpha(p_alpha, Niters):
                     #a: uniform so N/A
                     #b: mu=0.7,sigma=0.07
                     #P1= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
-                    P1=uniform(p_alpha[i],-np.pi,np.pi)
-                    P2=uniform(p_prime[i],-np.pi,np.pi)
+                    P1=uniform(p_alpha[i],-np.pi,np.pi) #since all other prior terms wind up cancelling out in the transition rule
+                    P2=uniform(p_prime[i],-np.pi,np.pi) #since all other prior terms wind up cancelling out in the transition rule
                     #P2= normal(p_prime[0],0.5,0.05)*normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
                     #Candidates
-                    g1= np.random.normal(p_alpha[i],a_sigma)
-                    g2=np.random.normal(p_prime[i],a_sigma)
-                    numerator=L1*P1*g1
-                    denominator=L2*P2*g2
-                    elem=numerator/denominator
-                    T=min(1,elem)
-                    move_prob=random_coin(T)
-                    if move_prob:
+                    g1= np.random.normal(p_alpha[i],a_sigma) #proposal distribution for current state
+                    g2=np.random.normal(p_prime[i],a_sigma) #proposal distribution for proposed state
+                    numerator=L1*P1*g1 #numerator for transition rule
+                    denominator=L2*P2*g2 #denominator for transition rule
+                    elem=numerator/denominator #fraction for transition rule
+                    T=min(1,elem) #transition rule
+                    move_prob=random_coin(T) #to move or not to move that is the question
+                    if move_prob: #if move_prob is True then move happens so new proposed state is accepted
                         p_alpha=p_prime
-                else:
+                else: #otherwise proposed state is rejected and stays at current state
                     p_alpha=p_alpha
 
     return p_alpha
@@ -162,9 +171,9 @@ def Alg4_beta(p_beta, Niters):
         for i in range(len(p_beta)):
             if i in [3,4]: #If it is a's
                 new_element=np.random.normal(loc=p_beta[i],scale=a_sigma) #draw random sample from proposal distribution
-                if new_element>-np.pi and new_element<np.pi:
+                if new_element>-np.pi and new_element<np.pi: #enforcing bound on 'a' value
                     p_prime=list(p_beta)
-                    p_prime[i]=new_element
+                    p_prime[i]=new_element #new proposed state
                     #Likelihood
                     L1=Likelihood(p_beta,V1,V2)
                     L2=Likelihood(p_prime,V1,V2)
@@ -191,7 +200,7 @@ def Alg4_beta(p_beta, Niters):
             if i in [5,6]: #If it is b's
                 new_element=np.random.normal(loc=p_beta[i],scale=b_sigma) #draw random sample from proposal distribution
                 p_prime=list(p_beta)
-                p_prime[i]=new_element
+                p_prime[i]=new_element #new proposed state
                 #Likelihood
                 L1=Likelihood(p_beta,V1,V2)
                 L2=Likelihood(p_prime,V1,V2)
@@ -215,6 +224,22 @@ def Alg4_beta(p_beta, Niters):
                     p_beta=p_prime
     return p_beta
 
+"""
+Alg4 (MH-within-Gibbs) for p shows up twice in Alex's protocol, the first is for burn-in so we just run the 
+algorithm and we only care about the p that we get at the end, and the other is using it for MCMC chain generation 
+so we want to track the p at each sampling step. As such i have been a clever clogs and made one function be used 
+for both and it just gets called differently for each method of use. Upon reflection i don't think i necessarily 
+need to have both the Markov and ReturnAll function but either way it still works fine. 
+
+So for the first case, as can be seen when i get to the actual algorithm further down the code, when not used for 
+MCMC i just call it with the argument Markov=False which means it enters the 'else' bracket of code with the 
+default argument for ReturnAll being False then that means it won't append the p result at each step into the MCMC 
+array and at the end of sampling it will just return the final p rather than the MCMC array. Meanwhile of course 
+when Alg4 is used for MCMC chain generation then i use Markov=True which means it enters the 'if' bracket which 
+basically just sets ReturnAll=True and Markov=False as it calls the function again and so this time enters 
+the 'else' bracket but because ReturnAll is set to True it aggregates all the p's into the MCMC array and because 
+ReturnAll is true it returns the MCMC array as an output.
+"""
 def Alg4(p,Niters,Markov=False,ReturnAll=False):
     """
     This Algorithm is the Metropolis-Hastings within Gibbs sampling algorithm that is 
@@ -225,14 +250,17 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
         return MCMC
     else: #If Markov==False
         MCMC=[]
+        #AP below is to track if on each step the move is accepted or not so that the total acceptance rate can 
+        # be found since some works point to an optimal total acceptance rate for metropolis-hastings being ~30%, 
+        # although this is MH-within-Gibbs...
         AP=[]
         for n in range(Niters):
             for i in range(len(p)):
                 if i in [0,1,2]: #If it is eta's
                     new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
-                    if new_element>0 and new_element<1:
+                    if new_element>0 and new_element<1: #enforcing bound on 'eta' value
                         p_prime=list(p)
-                        p_prime[i]=new_element
+                        p_prime[i]=new_element #new proposed state
                         #Likelihood
                         L1=Likelihood(p,V1,V2)
                         L2=Likelihood(p_prime,V1,V2)
@@ -242,12 +270,8 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                         #b: mu=0.7,sigma=0.07
                         #P1= normal(p[0],0.5,0.05)*normal(p[1],0.5,0.05)*normal(p[2],0.5,0.05)*uniform(p[3])*uniform(p[4])*normal(p[5],0.7,0.07)*normal(p[6],0.7,0.07) #Prior for p
                         P1=normal(p[i],0.5,eta_sigma)
-                        #print(p[i])
-                        #print(P1)
                         #P2= normal(p_prime[0],0.5,0.05)* normal(p_prime[1],0.5,0.05)*normal(p_prime[2],0.5,0.05)*uniform(p_prime[3])*uniform(p_prime[4])*normal(p_prime[5],0.7,0.07)*normal(p_prime[6],0.7,0.07) #prior for p'
                         P2=normal(p_prime[i],0.5,eta_sigma)
-                        #print(p_prime[i])
-                        #print(P2)
                         #Candidates
                         g1= np.random.normal(p[i],eta_sigma)
                         g2=np.random.normal(p_prime[i],eta_sigma)
@@ -262,9 +286,9 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                         p=p
                 if i in [3,4]: #If it is a's
                     new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
-                    if new_element>-np.pi and new_element<np.pi:
+                    if new_element>-np.pi and new_element<np.pi: #enforcing bound on 'a' value
                         p_prime=list(p)
-                        p_prime[i]=new_element
+                        p_prime[i]=new_element #new proposed state
                         #Likelihood
                         L1=Likelihood(p,V1,V2)
                         L2=Likelihood(p_prime,V1,V2)
@@ -293,7 +317,7 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                 if i in [5,6]: #If it is b's
                     new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
-                    p_prime[i]=new_element
+                    p_prime[i]=new_element #new proposed state
                     #Likelihood
                     L1=Likelihood(p,V1,V2)
                     L2=Likelihood(p_prime,V1,V2)
@@ -322,7 +346,7 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
             if ReturnAll:
                 MCMC.append(p)
         print("AP is")
-        print(sum(AP)/len(AP))
+        print(sum(AP)/len(AP)) #calculating the final acceptance probability
         if ReturnAll:
             return MCMC
         else:
@@ -334,9 +358,7 @@ def Alg5(p_alpha,Niters):
     described at the top of page 98 in Alex Neville's thesis.
     """
     for n in range(Niters):
-        #print(p_alpha)
-        p_prime=list(p_alpha) #Need to use list, lesson learned after 4 years of coding
-        #print(p_prime)
+        p_prime=list(p_alpha) #new proposed state
         new=[np.random.uniform(low=-np.pi,high=np.pi) for i in range(2)]
         p_prime[3]=new[0]
         p_prime[4]=new[1]
@@ -399,12 +421,9 @@ def Alg7(p_alpha, Niters):
         x=np.random.choice(3,2)
         q=[(x[i]-1)*np.pi for i in range(len(x))]
         #Likelihood
-        #print(q)
-        #print(p_alpha)
         test=list(p_alpha)
         test[3]+=q[0]
         test[4]+=q[1]
-        #print(test)
         L1=Likelihood(test,V1,V2)
         L2=Likelihood(p_alpha,V1,V2)
         #Priors
@@ -413,19 +432,8 @@ def Alg7(p_alpha, Niters):
         #b: mu=0.7,sigma=0.07
         #P1= normal(test[0],0.5,0.05)*normal(test[1],0.5,0.05)*normal(test[2],0.5,0.05)*uniform(test[3])*uniform(test[4])*normal(test[5],0.7,0.07)*normal(test[6],0.7,0.07) #Prior for p+q
         P1=uniform(test[3],-np.pi,np.pi)*uniform(test[4],-np.pi,np.pi)
-        #print(P1)
         #P2= normal(p_alpha[0],0.5,0.05)*normal(p_alpha[1],0.5,0.05)*normal(p_alpha[2],0.5,0.05)*uniform(p_alpha[3])*uniform(p_alpha[4])*normal(p_alpha[5],0.7,0.07)*normal(p_alpha[6],0.7,0.07) #Prior for p
         P2=uniform(p_alpha[3],-np.pi,np.pi)*uniform(p_alpha[4],-np.pi,np.pi)
-        #print(P2)
-        #print(np.exp(L1)) #not fine
-        #print(L1)
-        #print(P1) #fine
-        #print(np.exp(L2)) #not fine
-        #print(L2)
-        #print(P2) #fine
-        #print("leq is: {}".format(np.exp(L1)*P1)) #both eqs seem to keep coming out as zero
-        #print("req is: {}".format(np.exp(L2)*P2))
-        #if (np.exp(L1)*P1)>(np.exp(L2)*P2):
         if (L1+np.log(P1))>(L2+np.log(P2)):
             p_alpha=test
     return p_alpha
@@ -480,11 +488,8 @@ chain=Alg4(p_conv,I[7], Markov=True)
 ###Parameter estimation###
 
 """
-I imagine this chain object should contain all the values for each parameter at each 
+This chain object should contain all the values for each parameter at each 
 markov chain state number (i.e. I[7] by 7 matrix).
-To start with i shall just generate the markov chain plot and comment out the histogram 
-plot and polish can later be applied to get the standard plot with the smoothed histogram in the left column and
-markov state number plot in the right column with a Plot() function.
 """
 
 from scipy.stats import gaussian_kde
@@ -518,7 +523,6 @@ def Plot(chain): #Chain should contain all necessary markov chain data
     plt.show()
 
 chain=np.array(chain)
-#print(chain)
 Plot(chain)
 
 for i in range(len(p_conv)): #step 4
@@ -530,19 +534,16 @@ for i in range(len(p_conv)): #step 4
     print("Standard deviation is {}".format(np.std(par_array)))
     
 ###########################################
+#Testing, not included in Alex's protocol
+
 
 #For testing to compare unitaries, say V=1 as a simpler test
-
 U_true=ConstructU(eta1_true,eta2_true,eta3_true,a1_true+b1_true,a2_true+b2_true)
-
 phi_proof1=np.mean(chain[:,3])+np.mean(chain[:,5])
 phi_proof2=np.mean(chain[:,4])+np.mean(chain[:,6])
-
 U_proof=ConstructU(np.mean(chain[:,0]),np.mean(chain[:,1]),np.mean(chain[:,2]),phi_proof1,phi_proof2)
-
 print("U_true is")
 print(U_true)
-
 print("U_proof is")
 print(U_proof)
 
