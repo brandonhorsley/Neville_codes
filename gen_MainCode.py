@@ -1,65 +1,22 @@
 """
-This code will be dedicated to generalising MainCode.py so it isn't specifically built around the toy example.
+This code will be dedicated to generalising MainCode.py so it isn't specifically built around the toy 
+example. This is still limited to two modes though.
+
+The technique employed for this generalised variant is to make use of python's 'default dictionaries' 
+which essentially permits arrays as dictionary values for a fixed dictionary key, thus i can cleverly 
+index these arrays for specific parameter values.
 
 I have copied over the code from my generalised Aux_Nev code so that it is all in the same file
 for completeness.
 
-'a' values seem to deviate strongly after step 2.iii so on step iv it jumps up to worse numbers.
-so it is algorithm 7 (the stochastic pi kick search) that starts the big deviation. I think 
-the code is functionally doing what it should be, the only thing i haven't debugged is the 
-likelihood and the inequality check but the likelihood should surely be working fine since 
-it works in the other algs...
+Note also that this code doesn't have some of the troubleshooting resolutions from MainCode.py 
+like imposing proper bounds on parameter values.
 
-So really my main thing is that i think the deviation lies in the inequality criterion, my
-hardcoded variant raises runtime errors while my generalised code doesn't so maybe that highlights some troubles. 
-
-Hardcoded likelihoods often wind up rounding to zero, while this version is on the order of -232 and so isn't rounded to zero
-smallest value is usually around E-308 so really it can be seen then that there is some rounding errors.
-It still seems strange to me that the code that is generating worse estimates for a. What if i modulo 2pi
-it, is that valid and will they still be good? They will still be good, so now it is just a case of knowing if that is valid to do...
-
-After fiddling with likelihood in subalgorithms it seems apparent that i can't get a reasonable result by fiddling with the transition probability so i may need to dive into the likelihood function to normalise numbers maybe?
 Reference:
 Alg 4's are MH within Gibbs
 Alg 5 is MIS
 Alg 6 is MIS within Gibbs
 Alg 7 is stochastic pi kick search
-
-Run 1:
-Alg 5 basically all zeros with occassional high values
-Alg6 all 1's
-Alg4_alpha works well
-Alg7 basically all zeros
-
-Run2:
-Alg5 seems to fluctuate wildly between T being 0 and 1 
-Alg6 just generates 1s
-Alg4_Alpha throws nans because when g1 is negative, np.log(g1) throws an error
- ->corrected,now works well
-Alg7 keeps generating zeros
-
-Alg4_beta works well
-
-Alg4 works well
-
-All in all i think it matches quite well with figure 4.8, the only thing i am still 
-uncertain of is why my estimates for 'a' can be so out there. I should talk to patrick 
-about this offset voltage component and if a=3pi is the same as a=pi because of modulo 2pi.
-
-Noticed my unitary construction was backwards so i have sorted and now code seems to be working much better
-
-I see the issue in my Alg4 code, each niter has repeated p's for MCMC but each niter is different, so why is my MCMC just appending a bunch of the same p's each time?
--> I have done a lot of messing and it seems like the issue is something intrinsic about the code itself 
-because test cases all seem to work but when i try appending p it does something completely different, so it 
-isn't to do with the for loop and it isn't to do with the fact that it is a dictionary so it has to be something 
-with the variable names surely? I am genuinely running out of ideas (and sanity!) I'll give it a fresh look another day 
-and if it works then great, if not then i may need to get a second opinion from Patrick.
-
-Managed to bypass the error by making the MCMC operation of Alg4 produce a list of arrays rather than just a list of the p dictionary that for whatever reason failed to work.
-
-Code works well so the only remaining thing to do is sort out the a values getting unwieldly and keeping them in between 
--pi and pi. Perhaps i should impose this in the parameter selection part when a new a is proposed? I think as well my pi 
-kick search is faulty since i am only applying it to my 'a' values...
 """
 
 import numpy as np
@@ -73,6 +30,8 @@ rng = np.random.default_rng(RANDOM_SEED)
 
 #########################Supporting functions
 #Function for removing dictionary elements
+#This will be used to remove the voltage bit of my expanded dictionary later on 
+# so that it contains just the dictionary of parameters.
 def removekey(d, key):
     r = dict(d)
     del r[key]
@@ -113,6 +72,10 @@ eta3_true=0.479
 
 #Phase shifter stores a,b as [a,b], i will need to remember this in future components.
 #Additionally i will have to remember that circuit ordering and total ordering is reading from left to right
+
+#circuit ordering reads circuit type left to right, circuit element as key and then true value as the dictionary 
+# value.The below code block converts this into an array to record the ordering of the circuits and the circuit 
+# ordering into defaultdict called circuit.
 circuit_ordering=[('BS',eta1_true),('PS',[a1_true,b1_true]),('BS',eta2_true),('PS',[a2_true,b2_true]),('BS',eta3_true)]
 circuit = defaultdict(list)
 totalorder=[]
@@ -146,6 +109,7 @@ Vmax=5
 N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
 
+#Since each phase shifter has its own set of voltages applied to each other the block of code below makes one array for each phase shifter.
 V=[]
 for _ in range(len(circuit['PS'])):
     Velem=V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter
@@ -153,7 +117,7 @@ for _ in range(len(circuit['PS'])):
     V.append(list(Velem))
 
 expanded_dict= circuit.copy()
-expanded_dict['V'].append(V)
+expanded_dict['V'].append(V) #exppanded_dict has circuit parameters and the voltages as another key
 
 """
 but then to generate phi values i need to relate a,b values as well as the voltage across each phase shifter for a given experiment so what may be necessary is another default_dict
@@ -221,7 +185,7 @@ def normal(x,mu,sigma):
     denominator = sigma * np.sqrt(2*np.pi)
     return numerator/denominator
 
-def uniform(x):
+def uniform(x): 
     return 1/(2*np.pi)
 
 def random_coin(p):
@@ -250,7 +214,7 @@ I=[2,500,50,50,500,100,100,100]
 
 
 ###Burn in###
-
+#creating p_alpha
 p_alpha_list=[]
 for elem in totalorder:
     if elem=='BS':
@@ -266,7 +230,7 @@ p_alpha = defaultdict(list)
 for k, v in p_alpha_list:
     p_alpha[k].append(v)
 
-p_alpha['V'].append(V)
+p_alpha['V'].append(V) #putting V in p_alpha
 
 
 def Alg4_alpha(Niters,**p_alpha):
@@ -281,7 +245,7 @@ def Alg4_alpha(Niters,**p_alpha):
                     #new_element=(np.random.normal(loc=p_alpha['a'][i],scale=a_sigma))%(2*np.pi) #draw random sample from proposal distribution
                     new_element=np.random.normal(loc=p_alpha['a'][i],scale=a_sigma) #draw random sample from proposal distribution
                     p_prime=p_alpha.copy()
-                    p_prime['a'][i]=new_element
+                    p_prime['a'][i]=new_element #new proposed state
                     #Likelihood
                     L1=Likelihood(**p_alpha)
                     L2=Likelihood(**p_prime)
@@ -293,30 +257,8 @@ def Alg4_alpha(Niters,**p_alpha):
                     P2=uniform(p_prime['a'][i])
                     #Candidates
                     g1= np.random.normal(p_alpha['a'][i],a_sigma)
-                    #print(p_alpha['a'][i])
-                    #print(a_sigma)
-                    #print("--------------")
                     g2=np.random.normal(p_prime['a'][i],a_sigma)
-                    #print(p_prime['a'][i])
-                    #print(a_sigma)
-                    #numerator=L1*P1*g1
-                    #denominator=L2*P2*g2
-                    #elem=numerator/denominator
-                    #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
                     elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                    #print(L1)
-                    #print(np.log(P1))
-                    #print("--------------")
-                    #print(g1)
-                    #print(np.log(g1)) #This seems to throw errors more often by yielding nan
-                    #print(L1+np.log(P1)+np.log(g1))
-                    #print("-------------------")
-                    #print(L2+np.log(P2)+np.log(g2))
-                    #print("-------------------")
-                    #print(elem)
-                    #elem=np.exp(elem)
-                    #print(elem)
-                    #print("##############")
                     T=min(1,elem)
                     move_prob=random_coin(T)
                     if move_prob:
@@ -349,15 +291,7 @@ def Alg4_beta(Niters, **p_beta):
                     #Candidates
                     g1= np.random.normal(p_beta['a'][i],a_sigma)
                     g2=np.random.normal(p_prime['a'][i],a_sigma)
-                    #numerator=L1*P1*g1
-                    #denominator=L2*P2*g2
-                    #elem=numerator/denominator
-                    #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                    #print(elem)
-                    #elem=np.exp(elem)
-                    #print(elem)
                     elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                    #print(elem)
                     T=min(1,elem)
                     move_prob=random_coin(T)
                     if move_prob:
@@ -379,169 +313,13 @@ def Alg4_beta(Niters, **p_beta):
                     #Candidates
                     g1= np.random.normal(p_beta['b'][i],b_sigma)
                     g2=np.random.normal(p_prime['b'][i],b_sigma)
-                    #numerator=L1*P1*g1
-                    #denominator=L2*P2*g2
-                    #elem=numerator/denominator
-                    #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                    #print(elem)
-                    #elem=np.exp(elem)
-                    #print(elem)
                     elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                    #print(elem)
                     T=min(1,elem)
                     move_prob=random_coin(T)
                     if move_prob:
                         p_beta=p_prime
     return p_beta
 
-"""
-def Alg4(Niters,Markov=False,ReturnAll=False,**p):
-    
-    #This Algorithm is the Metropolis-Hastings within Gibbs sampling algorithm that is 
-    #described on the middle of page 94 in Alex Neville's thesis.
-    
-    if Markov: #i.e. if Markov==True
-        chain=Alg4(Niters, Markov=False, ReturnAll=True,**p)
-        #print(MCMC) #This is what generates the (wrong) repeated result
-        return chain
-    else: #If Markov==False
-        #MCMC=[]
-        #print(MCMC)
-        blank1=[]
-        blank2=[]
-        #print("start of Alg 4 p is: {}".format(p))
-        for n in range(Niters):
-            for k,v in p.items():
-                if k == 'eta': #If it is eta's
-                    for i in range(len(v)):
-                        new_element=np.random.normal(loc=p['eta'][i],scale=eta_sigma) #draw random sample from proposal distribution
-                        p_prime=p.copy()
-                        p_prime['eta'][i]=new_element
-                        #Likelihood
-                        L1=Likelihood(**p)
-                        L2=Likelihood(**p_prime)
-                        #Priors
-                        #eta: mu=0.5,sigma=0.05
-                        #a: uniform so N/A
-                        #b: mu=0.7,sigma=0.07
-                        P1=uniform(p['eta'][i])
-                        P2=uniform(p_prime['eta'][i])
-                        #Candidates
-                        g1= np.random.normal(p['eta'][i],eta_sigma)
-                        g2=np.random.normal(p_prime['eta'][i],eta_sigma)
-                        #numerator=L1*P1*g1
-                        #denominator=L2*P2*g2
-                        #elem=numerator/denominator
-                        #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                        #print(elem)
-                        #elem=np.exp(elem)
-                        #print(elem)
-                        elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                        #print(elem)
-                        T=min(1,elem)
-                        move_prob=random_coin(T)
-                        if move_prob:
-                            p=p_prime
-                if k == 'a': #If it is a's
-                    for i in range(len(v)):
-                        new_element=np.random.normal(loc=p['a'][i],scale=a_sigma) #draw random sample from proposal distribution
-                        p_prime=p.copy()
-                        p_prime['a'][i]=new_element
-                        #Likelihood
-                        L1=Likelihood(**p)
-                        L2=Likelihood(**p_prime)
-                        #Priors
-                        #eta: mu=0.5,sigma=0.05
-                        #a: uniform so N/A
-                        #b: mu=0.7,sigma=0.07
-                        P1=uniform(p['a'][i])
-                        P2=uniform(p_prime['a'][i])
-                        #Candidates
-                        g1= np.random.normal(p['a'][i],a_sigma)
-                        g2=np.random.normal(p_prime['a'][i],a_sigma)
-                        #numerator=L1*P1*g1
-                        #denominator=L2*P2*g2
-                        #elem=numerator/denominator
-                        #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                        #print(elem)
-                        #elem=np.exp(elem)
-                        #print(elem)
-                        elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                        #print(elem)
-                        T=min(1,elem)
-                        move_prob=random_coin(T)
-                        if move_prob:
-                            p=p_prime
-                if k == 'b': #If it is b's
-                    for i in range(len(v)):
-                        new_element=np.random.normal(loc=p['b'][i],scale=b_sigma) #draw random sample from proposal distribution
-                        p_prime=p_alpha.copy()
-                        p_prime['b'][i]=new_element
-                        #Likelihood
-                        L1=Likelihood(**p)
-                        L2=Likelihood(**p_prime)
-                        #Priors
-                        #eta: mu=0.5,sigma=0.05
-                        #a: uniform so N/A
-                        #b: mu=0.7,sigma=0.07
-                        P1=uniform(p['b'][i])
-                        P2=uniform(p_prime['b'][i])                        
-                        #Candidates
-                        g1= np.random.normal(p['b'][i],b_sigma)
-                        g2=np.random.normal(p_prime['b'][i],b_sigma)
-                        #numerator=L1*P1*g1
-                        #denominator=L2*P2*g2
-                        #elem=numerator/denominator
-                        #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                        #print(elem)
-                        #elem=np.exp(elem)
-                        #print(elem)
-                        elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                        #print(elem)
-                        T=min(1,elem)
-                        move_prob=random_coin(T)
-                        if move_prob:
-                            p=p_prime
-            #MCMC.append(removekey(p,'V'))
-            #print(MCMC)
-            #print("p on iteration {value1} is {value2}".format(value1=n,value2=p))
-            #MCMC.append(removekey(p,'V'))
-            #dic={str(n):n}
-            #MCMC.append(dic)
-            #print(p)
-            #blank.append(p)
-            ordering=[('a',n),('b',n+1),('a',n+2),('b',n+3)]
-            #print(ordering)
-            circuit = defaultdict(list)
-            for k, v in ordering:
-                circuit[k].append(v)
-            #print(circuit)
-            blank1.append(circuit)
-            #print(blank1)
-            #print("#################################")
-            #print(p)
-            #_=removekey(p,'V')
-            #blank2.append(_)
-            #print(blank2)
-            #print("#################################")
-            #print(type(circuit))
-            #print(type(p))
-            #print("----------------")
-            #if ReturnAll:
-            #    _=removekey(p,'V')
-            #    MCMC.append(_)
-            #    #print("MCMC 1 is")
-                #print(MCMC) #So this generates the right result
-            #print(MCMC)
-        #print("#############################")
-        #print(MCMC)
-        #print("final p is {}".format(p))
-        if ReturnAll:
-            return MCMC
-        else:
-            return p
-
-"""
 #In this variant the MCMC functionality returns an array due to some strange error otherwise.
 def Alg4(Niters,Markov=False,ReturnAll=False,**p):
     
@@ -576,22 +354,13 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
                         #Candidates
                         g1= np.random.normal(p['eta'][i],eta_sigma)
                         g2=np.random.normal(p_prime['eta'][i],eta_sigma)
-                        #numerator=L1*P1*g1
-                        #denominator=L2*P2*g2
-                        #elem=numerator/denominator
-                        #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                        #print(elem)
-                        #elem=np.exp(elem)
-                        #print(elem)
                         elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                        #print(elem)
                         T=min(1,elem)
                         move_prob=random_coin(T)
                         if move_prob:
                             p=p_prime
                 if k == 'a': #If it is a's
                     for i in range(len(v)):
-                        #new_element=(np.random.normal(loc=p['a'][i],scale=a_sigma))%(2*np.pi) #draw random sample from proposal distribution
                         new_element=np.random.normal(loc=p['a'][i],scale=a_sigma) #draw random sample from proposal distribution
                         p_prime=p.copy()
                         p_prime['a'][i]=new_element
@@ -607,15 +376,7 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
                         #Candidates
                         g1= np.random.normal(p['a'][i],a_sigma)
                         g2=np.random.normal(p_prime['a'][i],a_sigma)
-                        #numerator=L1*P1*g1
-                        #denominator=L2*P2*g2
-                        #elem=numerator/denominator
-                        #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                        #print(elem)
-                        #elem=np.exp(elem)
-                        #print(elem)
                         elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                        #print(elem)
                         T=min(1,elem)
                         move_prob=random_coin(T)
                         if move_prob:
@@ -637,15 +398,7 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
                         #Candidates
                         g1= np.random.normal(p['b'][i],b_sigma)
                         g2=np.random.normal(p_prime['b'][i],b_sigma)
-                        #numerator=L1*P1*g1
-                        #denominator=L2*P2*g2
-                        #elem=numerator/denominator
-                        #elem=(L1+np.log(P1)+np.log(g1))-(L2+np.log(P2)+np.log(g2))
-                        #print(elem)
-                        #elem=np.exp(elem)
-                        #print(elem)
                         elem=np.exp(L1+np.log(P1)-L2-np.log(P2))*g1/g2
-                        #print(elem)
                         T=min(1,elem)
                         move_prob=random_coin(T)
                         if move_prob:
@@ -653,7 +406,7 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
             
             #print("final p is {}".format(p))
             _=removekey(p,'V')
-            #print(dictionary)
+
             etaarray=np.array(_['eta'])
             aarray=np.array(_['a'])
             barray=np.array(_['b'])
@@ -692,21 +445,12 @@ def Alg5(Niters,**p_alpha):
         P2=1
         for i in range(len(p_prime['a'])):
             P2*=uniform(p_prime['a'][i])
-        #elem=(np.exp(L1)*P1)/(np.exp(L2)*P2)
-        #elem=np.exp((L1-L2))*(P1/P2)
-        #print(L1)
-        #print(L2)
-        #print(L1-L2)
+
         elem=(L1+np.log(P1))-(L2+np.log(P2))
-        #print(elem)
         elem=np.exp(elem)
-        #print((L1+np.log(P1)))
-        #print((L2+np.log(P2)))
-        #print((L1+np.log(P1))-(L2+np.log(P2)))
-        #print(elem)
-        #print('##################')
+
         T=min(1,elem)
-        #np.log(1)=0,np.log(0)=-inf#
+        
         #If negative then logT will be the value,otherwise logT will be zero so T will be 1
         #could run a modification so it is accept/reject rather than the most formal version of transition probabilities
         move_prob=random_coin(T)
@@ -735,13 +479,8 @@ def Alg6(Niters,**p_alpha):
                     #b: mu=0.7,sigma=0.07
                     P1=uniform(p_alpha['a'][i])
                     P2=uniform(p_prime['a'][i])
-                    #numerator=L1*P1
-                    #denominator=L2*P2
-                    #elem=numerator/denominator
                     elem=(L1+np.log(P1))-(L2+np.log(P2))
-                    #print(elem)
                     elem=np.exp(elem)
-                    #print(elem)
                     T=min(1,elem)
                     move_prob=random_coin(T)
                     if move_prob:
@@ -759,7 +498,6 @@ def Alg7(Niters, **p_alpha):
         test=p_alpha.copy()
         for i in range(len(test['a'])):
             test['a'][i]+=q[i]
-            #test['a'][i]=test['a'][i]%(2*np.pi)
         #Likelihood
         L1=Likelihood(**test)
         L2=Likelihood(**p_alpha)
@@ -773,12 +511,8 @@ def Alg7(Niters, **p_alpha):
         P2=1
         for i in range(len(p_alpha['a'])):
             P2*=uniform(p_alpha['a'][i])
-        #print(L1)
-        #print(np.log(P1))
-        #print(L2)
-        #print(np.log(P2))
+
         #Am reworking the inequality since np.exp(likelihood) takes it to zero so i am logging the priors instead since it doesn't alter the inequality
-        #print((L1+np.log(P1))-(L2+np.log(P2)))
         if (L1+np.log(P1))>(L2+np.log(P2)):
         #if (np.exp(L1)*P1)>(np.exp(L2)*P2):
             p_alpha=test

@@ -8,14 +8,22 @@ I have decided that i will reflect the input description of the real circuit i a
 array of strings where each string element reads out the circuit top to down and left to right like how quandela's 
 perceval language gets the stuff inputted. The string array should look as follows:
 elements=["BS,1,2","BS,3,4","PS,1","PS,3"]
-I would put the terms in brackets for visual distinguishability but the way i see it i can destringify each element 
-of the array and pass that destringified version to a function as an argument.
+    ====
+---|    |--PS--
+   | BS |
+---|    |------
+    ====
+---|    |--PS--
+   | BS |
+---|    |------
+    ====
+
+I would put the terms in brackets for visual distinguishability but the way i see it i can 'destringify' each element 
+of the array and pass that 'destringified' version to a function as an argument.
 So then the next thing is that destringifying ain't that simple, regex split() functionality should be good to 
 maybe split up the string element and fortunately the beamsplitter argument doesn't need to be converted since i 
 can just use that as a reference point to call e.g. the beamsplitter function and then use int() on the modes to 
 get those modes as the arguments.
-
-Does BS(1,2)=BS(2,1), I imagine it should be right?
 
 Changing my procedure to include the true values in elements array since it just makes sense to keep them together 
 and i can slice out the relevant parts when it gets to the parameter part of the code.
@@ -31,6 +39,7 @@ RANDOM_SEED = 8927 #Seed for numpy random
 rng = np.random.default_rng(RANDOM_SEED)
 
 #########################Supporting functions
+#Function for splitting strings with elements separated by commas
 def extraction(string):
     output_list=[]
     if isinstance(string,str):
