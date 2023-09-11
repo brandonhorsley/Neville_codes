@@ -42,12 +42,14 @@ def gaussian_mcmc(hops,mu,sigma):
     current = np.random.uniform(-5*sigma+mu,5*sigma+mu)
     for i in range(hops):
         states.append(current)
-        movement = np.random.uniform(-5*sigma+mu,5*sigma+mu)
-        
+        #movement = np.random.uniform(-5*sigma+mu,5*sigma+mu)
+        movement = np.random.normal(loc=current,scale=1) #new state
         curr_prob = normal(x=current,mu=mu,sigma=sigma)
         move_prob = normal(x=movement,mu=mu,sigma=sigma)
         
-        acceptance = min(move_prob/curr_prob,1) #g() is a uniform distribution so it cancels
+        #acceptance = min(move_prob/curr_prob,1) #g() is a uniform distribution so it cancels
+        acceptance = min((move_prob*normal(x=movement,mu=current,sigma=1))/(curr_prob*normal(x=current,mu=movement,sigma=1)),1) #g() is a uniform distribution so it cancels
+
         if random_coin(acceptance):
             current = movement
     return states[burn_in:]
@@ -58,3 +60,4 @@ dist = gaussian_mcmc(100_000,mu=0,sigma=1) #Sampling
 plt.hist(dist,density=True,bins=20) #Showing sampling
 plt.plot(lines,normal_curve) #Showing true plot
 
+#works!?

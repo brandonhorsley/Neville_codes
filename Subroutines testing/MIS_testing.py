@@ -190,15 +190,13 @@ def random_coin(p):
         return False
     else:
         return True
+    
 #Draws from a standard normal: N(0,1)
-sim_draws=np.random.standard_normal(size=10)
+sim_draws=np.random.standard_normal(size=1000)
 #print(sim_draws) 
 
-#plt.hist(sim_draws,density=True) #checks out
-#plt.show()
-
-N_iters=100000 #Number of iterations of algorithm
-#N_iters=1000 #Number of iterations of algorithm
+#N_iters=100000 #Number of iterations of algorithm
+N_iters=10000 #Number of iterations of algorithm
 mu_current=0
 mu=[mu_current]
 
@@ -212,39 +210,47 @@ def Likelihood(mu):
     #result=((2*np.pi*sigma**2)**(-len(sim_draws)/2))*np.exp(-(summation)/(2*sigma**2))
     #print(-summation/(2*sigma**2))
     #print((2*np.pi*sigma**2)**(-len(sim_draws)/2)) #this is coming out to zero which means log becomes inf
-    result=(-summation/(2*sigma**2))*np.log((2*np.pi*sigma**2)**(-len(sim_draws)/2))
+    #result=(-summation/(2*sigma**2))*np.log((2*np.pi*sigma**2)**(-len(sim_draws)/2))
+    #return result
+    result=np.exp((-summation/(2*sigma**2)))
     return result
 
 for _ in range(N_iters):
     #print(mu_current)
-    mu_new=np.random.normal(loc=mu_current,scale=1)
+    mu_new=np.random.normal(loc=mu_current,scale=.01)
     #print(mu_new)
     #print("#########")
     #sigma_new=np.random.normal(loc=sigma[_])
     #p_new=[mu_new,sigma_new]
     L1=Likelihood(mu_current)
     L2=Likelihood(mu_new)
-    #print(L1) #getting inf
+    #print(mu_current)
+    #print(L1)
+    #print(mu_new)
     #print(L2)
+    #print("######################")
     #P1=normal(p[0],0,1)*normal(p[1],1,1)
     #P2=normal(p_new[0],0,1)*normal(p_new[1],1,1)
-    P1=np.log(normal(mu_current,0,1))
-    P2=np.log(normal(mu_new,0,1))
+    P1=normal(mu_current,0,1)
+    P2=normal(mu_new,0,1)
+    #P1=np.log(normal(mu_current,0,1))
+    #P2=np.log(normal(mu_new,0,1))
     #print(P1)
     #print(P2)
-    #elem=(L1*P1)/(L2*P2)
-    elem=(L1+P1-L2-P2)
+    elem=(L1*P1)/(L2*P2)
+    #elem=(L1+P1-L2-P2)
     #elem=np.exp(elem)
     #if np.isnan(elem):
     #    elem=0
     #print(elem)
-    #T=min(1,elem)
-    coin_draw=np.random.uniform(low=0,high=1)
+    T=min(1,elem)
+    #coin_draw=np.random.uniform(low=0,high=1)
     #print(np.log(coin_draw))
-    if np.log(coin_draw)<=elem:
-        move_prob=True
-    else:
-        move_prob=False
+    #if np.log(coin_draw)<=elem:
+    #    move_prob=True
+    #else:
+    #    move_prob=False
+    move_prob=random_coin(T)
     #print("Transition probability is: {}".format(T)) #issue is transition probabilty is too frequently 1 even when things are way off.
     #move_prob=random_coin(T)
     #print(move_prob) #No move ever got rejected because T was always 1...
@@ -255,11 +261,11 @@ for _ in range(N_iters):
     #sigma.append(p[1])
 
 #plt.plot(mu)
-eval_points = np.linspace(np.min(mu), np.max(mu),len(mu))
-kde=gaussian_kde(mu)
-evaluated=kde.evaluate(eval_points)
-evaluated/=sum(evaluated) #For normalisation
-plt.plot(eval_points,evaluated)
-
-#plt.hist(sim_draws,density=True)
+#eval_points = np.linspace(np.min(mu), np.max(mu),len(mu))
+#kde=gaussian_kde(mu)
+#evaluated=kde.evaluate(eval_points)
+#evaluated/=sum(evaluated) #For normalisation
+#plt.plot(eval_points,evaluated)
+plt.hist(mu,density=True)
+plt.hist(sim_draws,density=True)
 plt.show()
