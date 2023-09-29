@@ -132,7 +132,8 @@ kernel = scipy.stats.gaussian_kde(chain[0])
 a_range = np.linspace(-1, 1, 1000)
 estimated_pdf = kernel.evaluate(a_range)  # already normalised
 
-print("a for max estim posterior: ", a_range[np.argmax(estimated_pdf)])
+print("a for MAP estimator: ", a_range[np.argmax(estimated_pdf)])
+print("a for MMSE estimator: ", np.mean(chain[0]))
 print("a exact: ", a)
 print()
 
@@ -150,7 +151,8 @@ kernel = scipy.stats.gaussian_kde(chain[1])
 b_range = np.linspace(-1, 1, 1000)
 estimated_pdf = kernel.evaluate(b_range)  # already normalised
 
-print("b for max estim posterior: ", b_range[np.argmax(estimated_pdf)])
+print("b for MAP estimator: ", b_range[np.argmax(estimated_pdf)])
+print("b for MMSE estimator: ", np.mean(chain[1]))
 print("b exact: ", b)
 
 
@@ -168,7 +170,8 @@ kernel = scipy.stats.gaussian_kde(chain[2])
 eta_range = np.linspace(0, 1, 1000)
 estimated_pdf = kernel.evaluate(eta_range)  # already normalised
 
-print("eta for max estim posterior: ", eta_range[np.argmax(estimated_pdf)])
+print("eta for MAP estimator: ", eta_range[np.argmax(estimated_pdf)])
+print("eta for MMSE estimator: ", np.mean(chain[2]))
 print("eta exact: ", eta)
 
 
