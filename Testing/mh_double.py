@@ -90,6 +90,9 @@ chain = chain.transpose()
 
 # Data visualisation
 # joint distribution
+# actually there is not much point in computing the joint distribution ?
+# it is enough to use each marginal for parameter estimation
+
 # kernel = scipy.stats.gaussian_kde(chain)
 # mumin, mumax = -1, 1
 # sigmamin, sigmamax = 0.01, 1

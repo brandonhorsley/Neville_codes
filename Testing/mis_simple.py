@@ -8,6 +8,7 @@ import scipy.integrate
 
 # basic implementation of Metropolis-Hastings to sample from posterior distribution
 # to guess the mean of a simple normal distribution
+# Here Metropolised Independence Sampling is the same basic MH algo but with a uniform proposal
 
 mu = 0.21  # mean of the distribution that we are trying to guess
 sigma = 1  # fixed parameter for the simulation

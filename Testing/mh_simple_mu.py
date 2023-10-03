@@ -18,7 +18,7 @@ N = 5000  # number of iterations for MCMC
 
 # In the functions, x is the parameter we want to estimate, y is data (possibly arrays for vectorisation)
 
-# likelihood formula up to constant prefactor
+# likelihood formula up to constant prefactor (normalisation)
 # Y: data shape (n, )
 # x: scalar parameter we want to estimate, shape (m, )
 def likelihood(y, x):
@@ -105,6 +105,7 @@ kernel = scipy.stats.gaussian_kde(L)
 mu_range = np.linspace(-2, 2, 400)
 estimated_pdf = kernel.evaluate(mu_range)  # already normalised
 
+# plot exact posterior pdf when we use likelihood
 # exact_pdf = posterior(mu_range, Y)
 # exact_norm = scipy.integrate.quad(lambda x: posterior(np.array([x]), Y)[0], -2, 2)[0]
 # exact_pdf /= exact_norm  # normalisation for simple example

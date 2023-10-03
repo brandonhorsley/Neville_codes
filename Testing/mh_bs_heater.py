@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats
 from matplotlib import pyplot as plt
 
-# One more with a single heater and unknown beamsplitter: aV**2 + b, we want to estimate a, b, eta
+# One more example with a single heater and unknown beamsplitter: aV**2 + b, we want to estimate a, b, eta
 # we get data by interfering 2 coherent states on an unknown beamsplitter
 
 a = 0.211 * np.pi  # arbitrary value for testing (in rad V^-2)
@@ -19,12 +19,13 @@ sigma_hyper = 0.5  # variance for proposal distribution
 
 # x: m value array for parameter a, b, eta, shape (m, 3)
 # n: number of data sample to draw
-# return array of n data points with outcome and voltage (y, v), shape (n, 2)
+# return array of n data points with outcome and voltage (y, v) for each value of parameters, shape (n, m, 2)
 def data_draw(x, n):
     v = np.random.uniform(size=(n, ))  # draw voltage at random
     v = v[:, np.newaxis].repeat(x.shape[0], axis=1)  # duplicate the value of voltage for each value of a, b, eta
     phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
     exp_phi = np.exp(1j * phi)
+    # we shouldn't have negative value under sqrt here because data is generated from realistic value
     sqrt_eta = np.sqrt(x[np.newaxis, :, 2])
     sqrt_1eta = np.sqrt(1-x[np.newaxis, :, 2])
     z1 = np.exp(-mu * np.abs(sqrt_eta*exp_phi + sqrt_1eta) ** 2)  # click probability, shape (n, m)
@@ -48,13 +49,15 @@ def data_draw(x, n):
 def loglikelihood(y, x):
     phi = x[np.newaxis, :, 0] * y[:, np.newaxis, 1]**2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
     exp_phi = np.exp(1j*phi)
+    # here we can possibly test unrealistic values leading to negative sqrt, so numerical result is unreliable
+    # however for such values, the prior should be such that these points will always be rejected in the acceptance test
     sqrt_eta = np.sqrt(np.abs(x[np.newaxis, :, 2]))  # abs to avoid negative number under sqrt for computation
-    sqrt_1eta = np.sqrt(np.abs(1 - x[np.newaxis, :, 2]))  # anyways the prior will exclude the point if out of bounds
+    sqrt_1eta = np.sqrt(np.abs(1 - x[np.newaxis, :, 2]))
     z1 = np.exp(-mu * np.abs(sqrt_eta * exp_phi + sqrt_1eta) ** 2)  # click probability, shape (n, m)
     Z1 = np.concatenate([1 - z1[np.newaxis], z1[np.newaxis]], axis=0)
     z2 = np.exp(-mu * np.abs(sqrt_1eta * exp_phi - sqrt_eta) ** 2)  # click probability
     Z2 = np.concatenate([1 - z2[np.newaxis], z2[np.newaxis]], axis=0)
-    Z = Z1[:, np.newaxis] * Z2[np.newaxis, :]  # shape (2,2,n,m)
+    Z = Z1[:, np.newaxis] * Z2[np.newaxis, :]  # combine all detection patterns, shape (2,2,n,m)
     Z = Z.reshape((4, Z.shape[2], Z.shape[3]))
     mask = np.array(y[:, 0], dtype=int)
     z = Z[mask, np.arange(Z.shape[1])]  # select only the outcomes that we observe
@@ -95,7 +98,7 @@ def logproposal_distribution(x1, x2):
 
 
 # Draw a single sample from proposal; normal distribution centred on point x1
-# x1: value of parameters, shape (m1, m2, index)
+# x1: value of parameters, shape (m, index)
 # return: value of parameters for final point x2, same shape as x1
 def proposal_draw(x1):
     a_draw = np.random.normal(loc=x1[:, 0], scale=sigma_hyper)
@@ -105,6 +108,7 @@ def proposal_draw(x1):
 
 
 y = data_draw(x=np.array([[a, b, eta]]), n=n).reshape((-1, 2))  # draw data from exact model
+y = y.reshape((-1, 2))  # reshape to remove the axis for x since we have m=1; not sure if it's relevant to have any m>1
 x = np.array([[0.1, 0.1, 0.5]])  # initial point
 L = [x]  # output chain
 for _ in range(N):
@@ -122,63 +126,66 @@ warmup = N // 10
 L = L[warmup:]  # dump first 10% of the chain
 chain = np.array(L)
 chain = chain.reshape((-1, 3))
-chain = chain.transpose()
+chain = chain.transpose()  # not very meaningful to transpose, just simpler for kde call later
 
 
 # Data visualisation
+# I no longer plot the exact posterior because it's a pain when using loglikelihood
 
 # marginal in a
-kernel = scipy.stats.gaussian_kde(chain[0])
+kernel_a = scipy.stats.gaussian_kde(chain[0])
 a_range = np.linspace(-1, 1, 1000)
-estimated_pdf = kernel.evaluate(a_range)  # already normalised
+estimated_pdf_a = kernel_a.evaluate(a_range)  # already normalised
 
-print("a for MAP estimator: ", a_range[np.argmax(estimated_pdf)])
+print("a for MAP estimator: ", a_range[np.argmax(estimated_pdf_a)])
 print("a for MMSE estimator: ", np.mean(chain[0]))
 print("a exact: ", a)
 print()
 
 plt.figure()
-plt.plot(a_range, estimated_pdf, "-", label="Kernel", color="red")
+plt.plot(a_range, estimated_pdf_a, "-", label="Kernel", color="red")
 plt.axvline(x=a, label="Exact a", color="blue")
 plt.legend()
 plt.xlim([0, 1])
-plt.ylim([0, np.round(1.2*np.max([estimated_pdf]))])
-plt.show()
-
+plt.ylim([0, np.round(1.2*np.max([estimated_pdf_a]))])
+# plt.show()
+plt.savefig("a.png")
 
 # marginal in b
-kernel = scipy.stats.gaussian_kde(chain[1])
+kernel_b = scipy.stats.gaussian_kde(chain[1])
 b_range = np.linspace(-1, 1, 1000)
-estimated_pdf = kernel.evaluate(b_range)  # already normalised
+estimated_pdf_b = kernel_b.evaluate(b_range)  # already normalised
 
-print("b for MAP estimator: ", b_range[np.argmax(estimated_pdf)])
+print("b for MAP estimator: ", b_range[np.argmax(estimated_pdf_b)])
 print("b for MMSE estimator: ", np.mean(chain[1]))
 print("b exact: ", b)
-
+print()
 
 plt.figure()
-plt.plot(b_range, estimated_pdf, "-", label="Kernel", color="red")
+plt.plot(b_range, estimated_pdf_b, "-", label="Kernel", color="red")
 plt.axvline(x=b, label="Exact b", color="blue")
 plt.legend()
 plt.xlim([-1, 1])
-plt.ylim([0, np.round(1.2*np.max([estimated_pdf]))])
-plt.show()
+plt.ylim([0, np.round(1.2*np.max([estimated_pdf_b]))])
+# plt.show()
+plt.savefig("b.png")
 
 
 # marginal in eta
-kernel = scipy.stats.gaussian_kde(chain[2])
+kernel_eta = scipy.stats.gaussian_kde(chain[2])
 eta_range = np.linspace(0, 1, 1000)
-estimated_pdf = kernel.evaluate(eta_range)  # already normalised
+estimated_pdf_eta = kernel_eta.evaluate(eta_range)  # already normalised
 
-print("eta for MAP estimator: ", eta_range[np.argmax(estimated_pdf)])
+print("eta for MAP estimator: ", eta_range[np.argmax(estimated_pdf_eta)])
 print("eta for MMSE estimator: ", np.mean(chain[2]))
 print("eta exact: ", eta)
 
 
 plt.figure()
-plt.plot(eta_range, estimated_pdf, "-", label="Kernel", color="red")
+plt.plot(eta_range, estimated_pdf_eta, "-", label="Kernel", color="red")
 plt.axvline(x=eta, label="Exact eta", color="blue")
 plt.legend()
 plt.xlim([0, 1])
-plt.ylim([0, np.round(1.2*np.max([estimated_pdf]))])
-plt.show()
+plt.ylim([0, np.round(1.2*np.max([estimated_pdf_eta]))])
+# plt.show()
+plt.savefig("eta.png")
