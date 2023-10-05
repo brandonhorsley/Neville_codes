@@ -239,9 +239,9 @@ def DataGen(InputNumber, Voltages, poissonian=True): #InputNumber=# of input pho
 
 data,C,P=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 #print(np.shape(data))
-#print(data) #Correct
-#print(C)
-#print(P)
+print(data) #Correct
+print(C)
+print(P)
 
 with pm.Model() as model_multinomial:
     #frac = pm.Dirichlet("frac", a=np.ones(M))
