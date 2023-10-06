@@ -224,7 +224,9 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
         MCMC=[]
         for n in range(Niters):
             for i in range(len(p)):
+                #print(i)
                 if i in [0,1,2]: #If it is eta's
+                    #print("enter eta")
                     new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
@@ -246,6 +248,7 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                         p=p_prime
 
                 if i in [3,4]: #If it is a's
+                    #print("enter a")
                     new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
@@ -267,6 +270,7 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                         p=p_prime
 
                 if i in [5,6]: #If it is b's
+                    #print("enter b")
                     new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state

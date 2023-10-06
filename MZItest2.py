@@ -128,9 +128,9 @@ def Alg4_alpha(p_alpha, Niters):
     for n in range(Niters):
         for i in range(len(p_alpha)):
             if i == 1: #If it is a's
-                print(p_alpha)
+                #print(p_alpha)
                 new_element=np.random.normal(loc=p_alpha[i],scale=a_sigma) #draw random sample from proposal distribution
-                print(new_element)
+                #print(new_element)
                 p_prime=list(p_alpha) 
                 p_prime[i]=new_element
                 #print(p_prime)
@@ -160,12 +160,12 @@ def Alg4_alpha(p_alpha, Niters):
                 #print(u)
 
                 if u <= term:
-                    print("accept")
+                    #print("accept")
                     p_alpha=p_prime
-                print(p_alpha)
-                print()
-                print("################")
-                print()
+                #print(p_alpha)
+                #print()
+                #print("################")
+                #print()
     return p_alpha
 
 def Alg4_beta(p_beta, Niters):
@@ -230,6 +230,7 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
         for n in range(Niters):
             for i in range(len(p)):
                 if i == 0: #If it is eta's
+                    print("enter eta")
                     new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
@@ -247,10 +248,14 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     post2=L2+P2
                     
                     term=(post1+g1)-(post2+g2)
-                    if np.log(np.random.uniform(0,1)) <= term:
-                        p=p_prime
+                    #if np.log(np.random.uniform(0,1)) <= term:
+                    #    p=p_prime
+                    A = np.where(term >= 0, 0, term)
+                    if np.random.uniform() <= np.exp(A):  # TODO array version, likely need cleanup
+                        p = p_prime
 
                 if i == 1: #If it is a's
+                    print("enter a")
                     new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
@@ -268,10 +273,14 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     post2=L2+P2
                     
                     term=(post1+g1)-(post2+g2)
-                    if np.log(np.random.uniform(0,1)) <= term:
-                        p=p_prime
+                    #if np.log(np.random.uniform(0,1)) <= term:
+                    #    p=p_prime
+                    A = np.where(term >= 0, 0, term)
+                    if np.random.uniform() <= np.exp(A):  # TODO array version, likely need cleanup
+                        p = p_prime
 
                 if i == 2: #If it is b's
+                    print("enter b")
                     new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
@@ -289,8 +298,11 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     post2=L2+P2
                     
                     term=(post1+g1)-(post2+g2)
-                    if np.log(np.random.uniform(0,1)) <= term:
-                        p=p_prime
+                    #if np.log(np.random.uniform(0,1)) <= term:
+                    #    p=p_prime
+                    A = np.where(term >= 0, 0, term)
+                    if np.random.uniform() <= np.exp(A):  # TODO array version, likely need cleanup
+                        p = p_prime
 
             if ReturnAll:
                 MCMC.append(p)
@@ -378,7 +390,7 @@ def Alg7(p_alpha, Niters):
     return p_alpha
 
 #Main code bulk
-
+"""
 for i in range(I[0]): #step 2.2
     #step 2.2i
     p_alpha=Alg5(p_alpha,I[1])
@@ -415,7 +427,9 @@ print("###step 2.6 done###")
 
 p_conv=list(p_zero) #step 2.7
 print("p_conv is: {}".format(p_conv))
+"""
 
+p_conv=list(p_alpha)
 
 ###Main Markov Chain Generation###
 
