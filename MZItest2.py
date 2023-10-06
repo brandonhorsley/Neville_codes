@@ -38,38 +38,29 @@ bottom_ket.shape=(2,1)
 bottom_bra=np.array([0,1])
 bottom_bra.shape=(1,2)
 
-def ConstructU(eta1,eta2,eta3,phi1,phi2):
-    U=construct_BS(eta3)@construct_PS(phi2)@construct_BS(eta2)@construct_PS(phi1)@construct_BS(eta1)
+def ConstructU(eta,phi):
+    U=construct_PS(phi)@construct_BS(eta)
     return U
 
 #####################Data generation
 Vmax=5
 N=100 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
-V1=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 1
-#V1=V1+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
-V2=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 2
-#V2=V2+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
+V=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter 1
+#V=V+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
 
-a1_true=0
-a2_true=0
+a_true=0
+b_true=0.711
+eta_true=0.447
 
-b1_true=0.788
-b2_true=0.711
-
-eta1_true=0.447
-eta2_true=0.548
-eta3_true=0.479
-
-def DataGen(InputNumber, V1, V2,poissonian=False): #InputNumber=# of input photons= should average to about 1000
+def DataGen(InputNumber, V,poissonian=False): #InputNumber=# of input photons= should average to about 1000
     data=np.empty((N,M))
     C=np.empty(N)
 
     for i in range(N):
         #Input into mth mode of beamsplitter
-        phi1_true=a1_true+b1_true*V1[i]**2 #phi=a+bV**2
-        phi2_true=a2_true+b2_true*V2[i]**2 #phi=a+bV**2
-        U_true=ConstructU(eta1_true,eta2_true,eta3_true,phi1_true,phi2_true) #Generate double MZI Unitary
+        phi_true=a_true+b_true*V[i]**2 #phi=a+bV**2
+        U_true=ConstructU(eta_true,phi_true) #Generate double MZI Unitary
         P_click1_true=abs(top_bra@U_true@top_ket)**2 #Probability of click in top
         P_click1_true=P_click1_true[0][0]
         P_click2_true=abs(bottom_bra@U_true@top_ket)**2 #Probability of click in bottom
@@ -85,26 +76,21 @@ def DataGen(InputNumber, V1, V2,poissonian=False): #InputNumber=# of input photo
     return data,C
 
 #data,C=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
-data,C=DataGen(InputNumber=1000,V1=V1,V2=V2,poissonian=False)
+data,C=DataGen(InputNumber=1000,V=V,poissonian=False)
 #print(data) #Correct
 #print(C)
 
-def Likelihood(p,V1,V2):
-    eta1=p[0]
-    eta2=p[1]
-    eta3=p[2]
-    a1=p[3]
-    a2=p[4]
-    b1=p[5]
-    b2=p[6]
+def Likelihood(p,V):
+    eta=p[0]
+    a=p[1]
+    b=p[2]
     #To be called after data generation
     P=np.empty((N,M))
     prob=np.empty(N)
 
-    for i in range(len(V1)): #len(V1) should equal len(V2)
-        phi1=a1+b1*V1[i]**2 #phi=a+bV**2
-        phi2=a2+b2*V2[i]**2 #phi=a+bV**2
-        U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
+    for i in range(len(V)):
+        phi=a+b*V[i]**2 #phi=a+bV**2
+        U=ConstructU(eta, phi) #Generate double MZI Unitary
         P_click1=np.abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
         P_click2=np.abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
@@ -127,11 +113,11 @@ a_sigma=np.pi/200
 b_sigma=b_est #Based around true values from Neville_thesis_8.py
 
 #I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,10000] #Smaller MCMC chain for troubleshooting
+I=[2,500,50,50,500,100,100,1000] #Smaller MCMC chain for troubleshooting
 
 ###Burn in###
 
-p_alpha=[0.5,0.5,0.5,0,0,0.7,0.7] #step 2.1
+p_alpha=[0.5,0,0.7] #step 2.1
 print("p_alpha initial is {}".format(p_alpha))
 
 def Alg4_alpha(p_alpha, Niters):
@@ -141,26 +127,45 @@ def Alg4_alpha(p_alpha, Niters):
     """
     for n in range(Niters):
         for i in range(len(p_alpha)):
-            if i in [3,4]: #If it is a's
+            if i == 1: #If it is a's
+                print(p_alpha)
                 new_element=np.random.normal(loc=p_alpha[i],scale=a_sigma) #draw random sample from proposal distribution
+                print(new_element)
                 p_prime=list(p_alpha) 
                 p_prime[i]=new_element
-                
-                L1=Likelihood(p_alpha,V1,V2)
-                L2=Likelihood(p_prime,V1,V2)
-                
+                #print(p_prime)
+                L1=Likelihood(p_alpha,V)
+                #print(L1)
+                L2=Likelihood(p_prime,V)
+                #print(L2)
+
                 P1=scipy.stats.uniform.logpdf(p_alpha[i],loc=-np.pi,scale=2*np.pi)
+                #print(P1)
                 P2=scipy.stats.uniform.logpdf(p_prime[i],loc=-np.pi,scale=2*np.pi)
-                
+                #print(P2)
+
                 g1=scipy.stats.norm.logpdf(new_element, p_alpha[i], a_sigma)
+                #print(g1)
                 g2=scipy.stats.norm.logpdf(new_element, p_prime[i], a_sigma)
-                
+                #print(g2)
+
                 post1=L1+P1
+                #print(post1)
                 post2=L2+P2
+                #print(post2)
                 
                 term=(post1+g1)-(post2+g2)
-                if np.log(np.random.uniform(0,1)) <= term:
+                #print(term)
+                u=np.log(np.random.uniform(0,1))
+                #print(u)
+
+                if u <= term:
+                    print("accept")
                     p_alpha=p_prime
+                print(p_alpha)
+                print()
+                print("################")
+                print()
     return p_alpha
 
 def Alg4_beta(p_beta, Niters):
@@ -170,13 +175,13 @@ def Alg4_beta(p_beta, Niters):
     """
     for n in range(Niters):
         for i in range(len(p_beta)):
-            if i in [3,4]: #If it is a's
+            if i == 1: #If it is a's
                 new_element=np.random.normal(loc=p_beta[i],scale=a_sigma) #draw random sample from proposal distribution
                 p_prime=list(p_beta)
                 p_prime[i]=new_element #new proposed state
                 
-                L1=Likelihood(p_beta,V1,V2)
-                L2=Likelihood(p_prime,V1,V2)
+                L1=Likelihood(p_beta,V)
+                L2=Likelihood(p_prime,V)
                 
                 P1=scipy.stats.uniform.logpdf(p_beta[i],loc=-np.pi,scale=2*np.pi)
                 P2=scipy.stats.uniform.logpdf(p_prime[i],loc=-np.pi,scale=2*np.pi)
@@ -188,15 +193,15 @@ def Alg4_beta(p_beta, Niters):
                 post2=L2+P2
                 
                 term=(post1+g1)-(post2+g2)
-                if np.log(np.random.uniform(0,1)) <= term:
+                if np.log(np.random.uniform(0,1)) >= term:
                     p_beta=p_prime
-            if i in [5,6]: #If it is b's
+            if i == 2: #If it is b's
                 new_element=np.random.normal(loc=p_beta[i],scale=b_sigma) #draw random sample from proposal distribution
                 p_prime=list(p_beta)
                 p_prime[i]=new_element #new proposed state
                 
-                L1=Likelihood(p_beta,V1,V2)
-                L2=Likelihood(p_prime,V1,V2)
+                L1=Likelihood(p_beta,V)
+                L2=Likelihood(p_prime,V)
                 
                 P1=scipy.stats.norm.logpdf(p_beta[i],loc=0.7,scale=b_sigma)
                 P2=scipy.stats.norm.logpdf(p_prime[i],loc=0.7,scale=b_sigma)
@@ -224,13 +229,13 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
         MCMC=[]
         for n in range(Niters):
             for i in range(len(p)):
-                if i in [0,1,2]: #If it is eta's
+                if i == 0: #If it is eta's
                     new_element=np.random.normal(loc=p[i],scale=eta_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
                     
-                    L1=Likelihood(p,V1,V2)
-                    L2=Likelihood(p_prime,V1,V2)
+                    L1=Likelihood(p,V)
+                    L2=Likelihood(p_prime,V)
                     
                     P1=scipy.stats.norm.logpdf(p[i],loc=0.7,scale=eta_sigma)
                     P2=scipy.stats.norm.logpdf(p_prime[i],loc=0.7,scale=eta_sigma)
@@ -245,13 +250,13 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     if np.log(np.random.uniform(0,1)) <= term:
                         p=p_prime
 
-                if i in [3,4]: #If it is a's
+                if i == 1: #If it is a's
                     new_element=np.random.normal(loc=p[i],scale=a_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
                     
-                    L1=Likelihood(p,V1,V2)
-                    L2=Likelihood(p_prime,V1,V2)
+                    L1=Likelihood(p,V)
+                    L2=Likelihood(p_prime,V)
                     
                     P1=scipy.stats.uniform.logpdf(p[i],loc=-np.pi,scale=2*np.pi)
                     P2=scipy.stats.uniform.logpdf(p_prime[i],loc=-np.pi,scale=2*np.pi)
@@ -266,13 +271,13 @@ def Alg4(p,Niters,Markov=False,ReturnAll=False):
                     if np.log(np.random.uniform(0,1)) <= term:
                         p=p_prime
 
-                if i in [5,6]: #If it is b's
+                if i == 2: #If it is b's
                     new_element=np.random.normal(loc=p[i],scale=b_sigma) #draw random sample from proposal distribution
                     p_prime=list(p)
                     p_prime[i]=new_element #new proposed state
                     
-                    L1=Likelihood(p,V1,V2)
-                    L2=Likelihood(p_prime,V1,V2)
+                    L1=Likelihood(p,V)
+                    L2=Likelihood(p_prime,V)
                     
                     P1=scipy.stats.norm.logpdf(p[i],loc=0.7,scale=b_sigma)
                     P2=scipy.stats.norm.logpdf(p_prime[i],loc=0.7,scale=b_sigma)
@@ -302,16 +307,14 @@ def Alg5(p_alpha,Niters):
     """
     for n in range(Niters):
         p_prime=list(p_alpha) #new proposed state
-        new=[np.random.uniform(low=-np.pi,high=np.pi) for i in range(2)]
-        p_prime[3]=new[0]
-        p_prime[4]=new[1]
+        new=np.random.uniform(low=-np.pi,high=np.pi)
+        p_prime[1]=new
 
-        L1=Likelihood(p_alpha,V1,V2)
-        L2=Likelihood(p_prime,V1,V2)
+        L1=Likelihood(p_alpha,V)
+        L2=Likelihood(p_prime,V)
 
-        P1=scipy.stats.uniform.logpdf(p_alpha[3],loc=-np.pi,scale=2*np.pi)+scipy.stats.uniform.logpdf(p_alpha[4],loc=-np.pi,scale=2*np.pi)
-        P2=scipy.stats.uniform.logpdf(p_prime[3],loc=-np.pi,scale=2*np.pi)+scipy.stats.uniform.logpdf(p_prime[4],loc=-np.pi,scale=2*np.pi)
-
+        P1=scipy.stats.uniform.logpdf(p_alpha[1],loc=-np.pi,scale=2*np.pi)
+        P2=scipy.stats.uniform.logpdf(p_prime[1],loc=-np.pi,scale=2*np.pi)
         post1=L1+P1
         post2=L2+P2
 
@@ -328,13 +331,13 @@ def Alg6(p_alpha,Niters):
     """
     for n in range(Niters):
         for i in range(len(p_alpha)):
-            if i in [3,4]: #If it is a's
+            if i == 1: #If it is a's
                 new_element=np.random.uniform(low=-np.pi,high=np.pi) #draw random sample from proposal distribution
                 p_prime=list(p_alpha) 
                 p_prime[i]=new_element
                 
-                L1=Likelihood(p_alpha,V1,V2)
-                L2=Likelihood(p_prime,V1,V2)
+                L1=Likelihood(p_alpha,V)
+                L2=Likelihood(p_prime,V)
                 
                 P1=scipy.stats.uniform.logpdf(p_alpha[i],loc=-np.pi,scale=2*np.pi)
                 P2=scipy.stats.uniform.logpdf(p_prime[i],loc=-np.pi,scale=2*np.pi)
@@ -354,18 +357,17 @@ def Alg7(p_alpha, Niters):
     at the bottom of page 98 in Alex Neville's thesis.
     """
     for n in range(Niters):
-        x=np.random.choice(3,2)
-        q=[(x[i]-1)*np.pi for i in range(len(x))]
+        x=np.random.choice(3,1)
+        q=(x[0]-1)*np.pi
 
         test=list(p_alpha)
-        test[3]+=q[0]
-        test[4]+=q[1]
+        test[1]+=q
 
-        L1=Likelihood(test,V1,V2)
-        L2=Likelihood(p_alpha,V1,V2)
+        L1=Likelihood(test,V)
+        L2=Likelihood(p_alpha,V)
 
-        P1=scipy.stats.uniform.logpdf(test[3],loc=-np.pi,scale=2*np.pi)+scipy.stats.uniform.logpdf(test[4],loc=-np.pi,scale=2*np.pi)
-        P2=scipy.stats.uniform.logpdf(p_alpha[3],loc=-np.pi,scale=2*np.pi)+scipy.stats.uniform.logpdf(p_alpha[4],loc=-np.pi,scale=2*np.pi)
+        P1=scipy.stats.uniform.logpdf(test[1],loc=-np.pi,scale=2*np.pi)
+        P2=scipy.stats.uniform.logpdf(p_alpha[1],loc=-np.pi,scale=2*np.pi)
 
         post1=L1+P1
         post2=L2+P2
@@ -395,15 +397,15 @@ for i in range(I[0]): #step 2.2
     print(p_alpha)
     print("###step 2.2iv done###")
 
-p_beta=[0.5,0.5,0.5,p_alpha[3],p_alpha[4],0.7,0.7]
+p_beta=[0.5,p_alpha[1],0.7]
 
-print("p_beta initial is: {}".format(p_beta))
+#print("p_beta initial is: {}".format(p_beta))
 #step 2.4
 p_beta=Alg4_beta(p_beta, I[5])
 print(p_beta)
 print("###step 2.4 done###")
 
-p_zero=[0.5,0.5,0.5,p_beta[3],p_beta[4],p_beta[5],p_beta[6]] #step 2.5
+p_zero=[0.5,p_beta[1],p_beta[2]] #step 2.5
 print("p_zero is: {}".format(p_zero))
 
 #step 2.6
@@ -429,8 +431,8 @@ markov chain state number (i.e. I[7] by 7 matrix).
 
 from scipy.stats import gaussian_kde
 
-names=["eta1","eta2","eta3","a1","a2","b1","b2"]
-trues=[eta1_true,eta2_true,eta3_true,a1_true,a2_true,b1_true,b2_true]
+names=["eta","a","b"]
+trues=[eta_true,a_true,b_true]
 
 def Plot(chain): #Chain should contain all necessary markov chain data
     """
