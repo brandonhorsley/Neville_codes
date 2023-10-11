@@ -24,6 +24,8 @@ of the cholesky decomposition and if an error is raised then automatically rerun
 Added MIS algorithm that works on all terms, so MIS stuff all sorted.
 
 Added MIS-within-Gibbs (both alpha model - meaning just a's - and full model so all terms). Both appear to work as expected.
+
+Added pi kick search, will only make an alpha model version, won't bother with the full version. Still standby that i think pi kick is a bit crap since it only works if your estimate for a is pi out, probably better for multiple phase shifters so obvs won't really work well in a single MZI unless your starting guess is far out, e.g. start at pi when the truly value is around zero, even then it should minimise after at most a few iterations. Tested so it works properly.
 """
 
 import numpy as np
@@ -39,9 +41,9 @@ eta = 0.521  # arbitrary value for testing
 
 mu = 0.5  # coherent state intensity
 n = 10000  # number of data sample tuples (outcome, voltage)
-#N = 50000  # size of MCMC
+N = 50000  # size of MCMC
 #N=1000
-N=1000
+
 sigma_hyper = 0.5  # variance for proposal distribution
 eta_sigma=0.005
 a_sigma=np.pi/200
@@ -217,9 +219,17 @@ def MIS_eta_proposal_draw(x1):
     eta_draw = np.random.uniform(low=0, high=1, size=(1,))
     return np.concatenate([a_draw[:, np.newaxis], b_draw[:, np.newaxis], eta_draw[:, np.newaxis]], axis=-1)
 
+def pi_draw(x1):
+    a_draw=np.pi*(np.random.choice(3,size=(1,))-1)
+    b_draw = x1[:,1]
+    eta_draw = x1[:,2]
+    return np.concatenate([a_draw[:, np.newaxis], b_draw[:, np.newaxis], eta_draw[:, np.newaxis]], axis=-1)
+
+
 y = data_draw(x=np.array([[a, b, eta]]), n=n).reshape((-1, 2))  # draw data from exact model
 y = y.reshape((-1, 2))  # reshape to remove the axis for x since we have m=1; not sure if it's relevant to have any m>1
 x = np.array([[0.1, 0.7, 0.5]])  # initial point
+#x=np.array([[np.pi,0.7,0.5]]) #initial point array to test pi kick alg
 
 #Alg4
 def MCMC_MHinGibbs(x):
@@ -346,7 +356,7 @@ def MCMC_MISinGibbs_a(x):
     chain = chain.transpose()  # not very meaningful to transpose, just simpler for kde call later
     return chain
 
-chain=MCMC_MISinGibbs_a(x)
+#chain=MCMC_MISinGibbs_a(x)
 
 def MCMC_MISinGibbs(x):
     #MIS-within-Gibbs alg
@@ -394,6 +404,31 @@ def MCMC_MISinGibbs(x):
 
 #chain=MCMC_MISinGibbs(x)
 
+#Alg7
+"""
+Warning this function will throw an error if only this algorithm is run since i have constructed it like the NEville thesis version where it is only proposing new 'a' values so b and eta don't change thus leading to issues with the gaussian kde for those chains.
+"""
+def MCMC_pi_kick(x):
+    L = [x]  # output chain
+    for _ in range(N):
+        x2=pi_draw(x1=x) # draw candidate
+
+        LL2 = logposterior(y=y, x=x2) #new
+        LL1 = logposterior(y=y, x=x) #current
+        LLdifference = LL2 - LL1
+
+        if LLdifference>0:
+            x=x2
+        L.append(x)
+    warmup = N // 10
+    L = L[warmup:]  # dump first 10% of the chain
+    chain = np.array(L)
+    chain = chain.reshape((-1, 3))
+    chain = chain.transpose()  # not very meaningful to transpose, just simpler for kde call later
+    return chain
+
+#chain=MCMC_pi_kick(x)
+
 def MCMC_MH(x):
     #MH algorithm
     L = [x]  # output chain
@@ -415,7 +450,7 @@ def MCMC_MH(x):
     chain = chain.transpose()  # not very meaningful to transpose, just simpler for kde call later
     return chain
 
-#chain=MCMC_MH(x)
+chain=MCMC_MH(x)
 
 # Data visualisation
 # I no longer plot the exact posterior because it's a pain when using loglikelihood
