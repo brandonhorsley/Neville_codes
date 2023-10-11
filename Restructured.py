@@ -4,6 +4,8 @@ Emilien's in too main ways. One is basically put the probabilities in log form a
 acceptance rules. Secondly is putting it into posterior form rather than P1*L1*g1 for example.
 
 Need to make sure my indentations are proper in the subalgorithm parts
+
+Definitely doesn't work
 """
 import numpy as np
 import scipy
