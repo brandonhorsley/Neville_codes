@@ -58,8 +58,8 @@ b_sigma=0.07
 def data_draw(x, n):
     v = np.random.uniform(size=(n, ))  # draw voltage at random
     v = v[:, np.newaxis].repeat(x.shape[0], axis=1)  # duplicate the value of voltage for each value of a, b, eta
-    phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
-    #phi = x[np.newaxis, :, 0] + x[np.newaxis, :, 1] * v ** 2 # a + b*V^2, shape (n, m)
+    #phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    phi = x[np.newaxis, :, 0] + x[np.newaxis, :, 1] * v ** 2 # a + b*V^2, shape (n, m)
     exp_phi = np.exp(1j * phi)
     # we shouldn't have negative value under sqrt here because data is generated from realistic value
     sqrt_eta = np.sqrt(x[np.newaxis, :, 2])
@@ -88,7 +88,8 @@ def data_draw(x, n):
 # Y: data shape (n, 2)
 # x: scalar parameter we want to estimate, shape (m, 3)
 def loglikelihood(y, x):
-    phi = x[np.newaxis, :, 0] * y[:, np.newaxis, 1]**2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    #phi = x[np.newaxis, :, 0] * y[:, np.newaxis, 1]**2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    phi = x[np.newaxis, :, 0] + + x[np.newaxis, :, 1] * y[:, np.newaxis, 1]**2   # a * V^2 + b, shape (n, m)
     exp_phi = np.exp(1j*phi)
     # here we can possibly test unrealistic values leading to negative sqrt, so numerical result is unreliable
     # however for such values, the prior should be such that these points will always be rejected in the acceptance test
