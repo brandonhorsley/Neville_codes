@@ -26,6 +26,8 @@ Added MIS algorithm that works on all terms, so MIS stuff all sorted.
 Added MIS-within-Gibbs (both alpha model - meaning just a's - and full model so all terms). Both appear to work as expected.
 
 Added pi kick search, will only make an alpha model version, won't bother with the full version. Still standby that i think pi kick is a bit crap since it only works if your estimate for a is pi out, probably better for multiple phase shifters so obvs won't really work well in a single MZI unless your starting guess is far out, e.g. start at pi when the truly value is around zero, even then it should minimise after at most a few iterations. Tested so it works properly.
+
+Changed phi to a+bV**2
 """
 
 import numpy as np
@@ -57,6 +59,7 @@ def data_draw(x, n):
     v = np.random.uniform(size=(n, ))  # draw voltage at random
     v = v[:, np.newaxis].repeat(x.shape[0], axis=1)  # duplicate the value of voltage for each value of a, b, eta
     phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    #phi = x[np.newaxis, :, 0] + x[np.newaxis, :, 1] * v ** 2 # a + b*V^2, shape (n, m)
     exp_phi = np.exp(1j * phi)
     # we shouldn't have negative value under sqrt here because data is generated from realistic value
     sqrt_eta = np.sqrt(x[np.newaxis, :, 2])

@@ -9,7 +9,9 @@ Acknowledged that i have to put in a ReturnLast argument in MCMC functions since
 
 Implemented Neville protocol with good success on a short run, before doing a longer run i would like to implement the Markov state plot
 
-Added markov state plot. All that is left is to add axes labels really.
+Added markov state plot. All that is left is to add axes labels really. Additionally perhaps input random selection of true values for parameters for more objective evaluation of performance.
+
+Changed phi to a+bV**2 like in Neville thesis. Changed in this and Duplicate.py. Changed back to original since somehow it is leading to worse estimates, could be case-specific so need to investigate further. Worth noting that this quick investigation was with short runs so could be the lack of ample mixing and convergence that could contribute.
 """
 
 import numpy as np
@@ -27,8 +29,8 @@ mu = 0.5  # coherent state intensity
 n = 10000  # number of data sample tuples (outcome, voltage)
 #N = 50000  # size of MCMC
 #N=1000
-#I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
-I=[2,500,50,50,500,100,100,1000] #Smaller MCMC chain for troubleshooting
+I=[2,500,50,50,500,100,100,100000] #Determines iteration number for each algorithm call
+#I=[2,500,50,50,500,100,100,1000] #Smaller MCMC chain for troubleshooting
 
 sigma_hyper = 0.5  # variance for proposal distribution
 eta_sigma=0.005
@@ -42,7 +44,8 @@ b_sigma=0.07
 def data_draw(x, n):
     v = np.random.uniform(size=(n, ))  # draw voltage at random
     v = v[:, np.newaxis].repeat(x.shape[0], axis=1)  # duplicate the value of voltage for each value of a, b, eta
-    phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    #phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    phi = x[np.newaxis, :, 0] + x[np.newaxis, :, 1] * v ** 2  # a + b*V^2 + b, shape (n, m)
     exp_phi = np.exp(1j * phi)
     # we shouldn't have negative value under sqrt here because data is generated from realistic value
     sqrt_eta = np.sqrt(x[np.newaxis, :, 2])
@@ -71,7 +74,8 @@ def data_draw(x, n):
 # Y: data shape (n, 2)
 # x: scalar parameter we want to estimate, shape (m, 3)
 def loglikelihood(y, x):
-    phi = x[np.newaxis, :, 0] * y[:, np.newaxis, 1]**2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    #phi = x[np.newaxis, :, 0] * y[:, np.newaxis, 1]**2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
+    phi = x[np.newaxis, :, 0] + x[np.newaxis, :, 1] * y[:, np.newaxis, 1] ** 2  # a + b*V^2 + b, shape (n, m)
     exp_phi = np.exp(1j*phi)
     # here we can possibly test unrealistic values leading to negative sqrt, so numerical result is unreliable
     # however for such values, the prior should be such that these points will always be rejected in the acceptance test
@@ -214,7 +218,7 @@ def pi_draw(x1):
 
 y = data_draw(x=np.array([[a, b, eta]]), n=n).reshape((-1, 2))  # draw data from exact model
 y = y.reshape((-1, 2))  # reshape to remove the axis for x since we have m=1; not sure if it's relevant to have any m>1
-x = np.array([[0.1, 0.7, 0.5]])  # initial point
+x = np.array([[0.5, 0.1, 0.5]])  # initial point
 #x=np.array([[np.pi,0.7,0.5]]) #initial point array to test pi kick alg
 
 #Alg4
