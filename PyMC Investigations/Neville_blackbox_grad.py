@@ -100,43 +100,88 @@ print("#################################################################")
 ##############################################################################################################
 
 
-def my_model(theta, x):
-    m, c = theta
-    return m * x + c
-
-def my_model2(theta,Voltages):
+def my_model2(theta,data,Voltages):
     #To be called after data generation
     eta1,eta2,eta3,a1,a2,b1,b2=theta
+    #print(eta1)
+    #print(eta2)
+    #print(eta3)
+    #print(a1)
+    #print(a2)
+    #print(b1)
+    #print(b2)
+    #print(data)
     prob=np.empty(len(Voltages))
     for i in range(len(Voltages)):
+        #print(data[i])
         phi1=a1+b1*Voltages[i]**2 #phi=a+bV**2
         phi2=a2+b2*Voltages[i]**2 #phi=a+bV**2
+        print(eta1) #U gives nan's when these values become unphysical
+        print(eta2) #so then how to stop proposing unphysical eta's?
+        print(eta3)
+        print(phi1) #fine 
+        print(phi2) #fine
         U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
+        #print(U) #nan's
         P_click1=abs(top_bra@U@top_ket)**2 #Probability of click in top
         P_click1=P_click1[0][0]
-        P_click2=abs(bottom_bra@U@bottom_ket)**2 #Probability of click in bottom
+        P_click2=abs(bottom_bra@U@top_ket)**2 #Probability of click in bottom
         P_click2=P_click2[0][0]
-        P=np.array([P_click1.eval(),P_click2.eval()])
+        #print(P_click1) #nan
+        #print(P_click2) #nan
+        #print()
+        #P=np.array([P_click1.eval(),P_click2.eval()])
+        P=np.array([P_click1,P_click2])
         #n=C,p=P,x=array of clicks
-        print("likelihood start")
-        print(data[i])
-        print(C[i])
+        #print("likelihood start")
+        #print(data[i])
+        #print(C[i])
         print(P)
-        prob[i]=scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P)
-        return prob
+        #print(data[i])
+        #print(sum(data[i]))
+        #print(P) #nan are occurring here
+        #print()
+        prob[i]=scipy.stats.multinomial.logpmf(x=data[i],n=sum(data[i]),p=P)
+    print(prob) #getting nan
+    tot_prob=sum(prob)
+    print()
+    return tot_prob
     
 
-#Calling this won't work hence why we call the pytensor op below
-def my_loglike(theta, x, data, sigma):
-    model = my_model(theta, x)
-    return -(0.5 / sigma**2) * np.sum((data - model) ** 2)
+def my_loglike2(theta,data,Voltages):
+    model=my_model2(theta,data,Voltages)
+    return model
 
-def my_loglike2(theta,Voltages):
-    model=my_model2(theta,Voltages)
-    return np.log(model)
+def normal_gradients(theta, x, data, sigma):
+    """
+    Calculate the partial derivatives of a function at a set of values. The
+    derivatives are calculated using the central difference, using an iterative
+    method to check that the values converge as step size decreases.
+
+    Parameters
+    ----------
+    theta: array_like
+        A set of values, that are passed to a function, at which to calculate
+        the gradient of that function
+    x, data, sigma:
+        Observed variables as we have been using so far
+
+
+    Returns
+    -------
+    grads: array_like
+        An array of gradients for each non-fixed value.
+    """
+
+    grads = np.empty(2)
+    aux_vect = data - my_model2(theta, V)  # /(2*sigma**2)
+    grads[0] = np.sum(aux_vect * x)
+    grads[1] = np.sum(aux_vect)
+
+    return grads
 
 # define a pytensor Op for our likelihood function
-class LogLike(pt.Op):
+class LogLikeWithGrad(pt.Op):
     """
     Specify what type of object will be passed and returned to the Op when it is
     called. In our case we will be passing it a vector of values (the parameters
@@ -169,30 +214,61 @@ class LogLike(pt.Op):
         self.data = data
         self.Voltages=Voltages
 
+        # initialise the gradient Op (below)
+        self.logpgrad = LogLikeGrad(self.data, self.Voltages)
+
     def perform(self, node, inputs, outputs):
         # the method that is used when calling the Op
         (theta,) = inputs  # this will contain my variables
         # call the log-likelihood function
-        logl = self.likelihood(theta, Voltages)
+        logl = self.likelihood(theta, self.data, self.Voltages)
         outputs[0][0] = np.array(logl)  # output the log-likelihood
 
-# set up our data
-#N = 10  # number of data points
-#sigma = 1.0  # standard deviation of noise
-#x = np.linspace(0.0, 9.0, N)
+    def grad(self, inputs, g):
+        # the method that calculates the gradients - it actually returns the
+        # vector-Jacobian product - g[0] is a vector of parameter values
+        (theta,) = inputs  # our parameters
+        return [g[0] * self.logpgrad(theta)]
 
-#mtrue = 0.4  # true gradient
-#ctrue = 3.0  # true y-intercept
+class LogLikeGrad(pt.Op):
 
-#truemodel = my_model([mtrue, ctrue], x)
+    """
+    This Op will be called with a vector of values and also return a vector of
+    values - the gradients in each dimension.
+    """
 
-# make data
-#rng = np.random.default_rng(716743)
-#data = sigma * rng.normal(size=N) + truemodel
+    itypes = [pt.dvector]
+    otypes = [pt.dvector]
+
+    def __init__(self, data, Voltages):
+        """
+        Initialise with various things that the function requires. Below
+        are the things that are needed in this particular example.
+
+        Parameters
+        ----------
+        data:
+            The "observed" data that our log-likelihood function takes in
+        x:
+            The dependent variable (aka 'x') that our model requires
+        sigma:
+            The noise standard deviation that out function requires.
+        """
+
+        # add inputs as class attributes
+        self.data = data
+        self.Voltages=Voltages
+
+    def perform(self, node, inputs, outputs):
+        (theta,) = inputs
+
+        # calculate gradients
+        grads = normal_gradients(theta, self.data, self.Voltages)
+
+        outputs[0][0] = grads
 
 # create our Op
-#logl = LogLike(my_loglike, data, x, sigma)
-logl = LogLike(my_loglike2,data,V)
+logl = LogLikeWithGrad(my_loglike2,data,V)
 # use PyMC to sampler from log-likelihood
 with pm.Model():
     # uniform priors on m and c
@@ -212,53 +288,11 @@ with pm.Model():
     #theta = pt.as_tensor_variable([m, c])
     theta=pt.as_tensor_variable([eta1,eta2,eta3,a1,a2,b1,b2])
     # use a Potential to "call" the Op and include it in the logp computation
-    pm.Potential("likelihood", logl(theta,V))
+    pm.Potential("likelihood", logl(theta))
 
     # Use custom number of draws to replace the HMC based defaults
-    idata_mh = pm.sample(3000, tune=1000)
+    idata_mh = pm.sample(3000, tune=1000,cores=1)
 
 # plot the traces
 #az.plot_trace(idata_mh, lines=[("m", {}, mtrue), ("c", {}, ctrue)]);
 az.plot_trace(idata_mh)
-
-"""
-def Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,Voltages):
-    #To be called after data generation
-    
-    prob=np.empty(len(Voltages))
-    for i in range(len(Voltages)):
-        phi1=a1+b1*Voltages[i]**2 #phi=a+bV**2
-        phi2=a2+b2*Voltages[i]**2 #phi=a+bV**2
-        U=ConstructU(eta1,eta2,eta3,phi1,phi2) #Generate double MZI Unitary
-        P_click1=abs(top_bra@U@top_ket)**2 #Probability of click in top
-        P_click1=P_click1[0][0]
-        P_click2=abs(bottom_bra@U@bottom_ket)**2 #Probability of click in bottom
-        P_click2=P_click2[0][0]
-        P=np.array([P_click1.eval(),P_click2.eval()])
-        #n=C,p=P,x=array of clicks
-        print("likelihood start")
-        print(data[i])
-        print(C[i])
-        print(P)
-        prob[i]=scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P)
-        return prob
-
-############################Model
-
-with Model() as model:
-    # Define priors
-    eta1 = Normal("eta1", mu=0.5, sigma=0.05,initval=0.5)
-    eta2 = Normal("eta2", mu=0.5, sigma=0.05,initval=0.5)
-    eta3= Normal("eta3", mu=0.5, sigma=0.05,initval=0.5)
-    a1= Uniform("a1", lower=-np.pi, upper=np.pi,initval=0)
-    a2= Uniform("a2", lower=-np.pi, upper=np.pi,initval=0)
-    b1= Normal("b1", mu=0.7, sigma=0.07,initval=0.5)
-    b2= Normal("b2", mu=0.7, sigma=0.07,initval=0.5)
-    #Voltages=Uniform("Voltages",0,Vmax)
-    counts = Multinomial("counts", n=C, p=Likelihood(eta1,eta2,eta3,a1,a2,b1,b2,V), observed=data)
-    trace_multinomial = sample(draws=int(1e5), step=pm.metropolis(), return_inferencedata=True,cores=1)
-
-###################Bayesian analysis
-az.plot_trace(data=trace_multinomial)
-
-"""

@@ -1,17 +1,11 @@
 """
-Since Duplicate.py seems to have been fleshed out well i am opening this code file as pseudo version control 
-to put iteration number in algorithm functions and finally implement the neville protocol (and add/alter 
-visualisation to include markov state number plot so we have a full trace plot system in place).
+Am using this document to alter MZI_neville.py to put in the fock basis rather than using coherent light.
 
 Active notes:
 
-Acknowledged that i have to put in a ReturnLast argument in MCMC functions since most of them don't need to track all the states, just return the last one. So I will do this for all the necessary Neville algorithms but leave the full model ones as they are.
+Will only really need to change data draw and loglikelihood, also remember that all we are really doing by getting probability from unitary is extracting the first column (since light is put in the first mode)
 
-Implemented Neville protocol with good success on a short run, before doing a longer run i would like to implement the Markov state plot
-
-Added markov state plot. All that is left is to add axes labels really. Additionally perhaps input random selection of true values for parameters for more objective evaluation of performance.
-
-Changed phi to a+bV**2 like in Neville thesis. Changed in this and Duplicate.py. Changed back to original since somehow it is leading to worse estimates, could be case-specific so need to investigate further. Worth noting that this quick investigation was with short runs so could be the lack of ample mixing and convergence that could contribute.
+First attempt on changing data draw, will need to comb through and make sure the vectorisation is appropriate.Not only that but also since we are moving into fock basis will need to edit to put more photons in rather than the click of no click from the coherent state example?
 """
 
 import numpy as np
@@ -44,9 +38,10 @@ b_sigma=0.07
 def data_draw(x, n):
     v = np.random.uniform(size=(n, ))  # draw voltage at random
     v = v[:, np.newaxis].repeat(x.shape[0], axis=1)  # duplicate the value of voltage for each value of a, b, eta
-    #phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a + b* V^2, shape (n, m)
+    #phi = x[np.newaxis, :, 0] * v ** 2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
     phi = x[np.newaxis, :, 0] + x[np.newaxis, :, 1] * v ** 2  # a + b*V^2 + b, shape (n, m)
     exp_phi = np.exp(1j * phi)
+    """
     # we shouldn't have negative value under sqrt here because data is generated from realistic value
     sqrt_eta = np.sqrt(x[np.newaxis, :, 2])
     sqrt_1eta = np.sqrt(1-x[np.newaxis, :, 2])
@@ -58,16 +53,50 @@ def data_draw(x, n):
     #print(np.shape(Z))
     Z = Z.reshape((4, Z.shape[2], Z.shape[3]))  # proba distribution
     #print(np.shape(Z))
-    print(Z)
+    #print(Z)
     z = np.cumsum(Z, axis=0)  # cumulative distribution
-    print(z)
+    #print(z)
 
     u = np.random.uniform(size=(Z.shape[-2], Z.shape[-1]))  # random draw to choose outcome, shape (n,m)
 
     y = np.argmax(u[np.newaxis, :, :] < z, axis=0)  # selected outcome value, shape (n, m)
-    print(y)
+    #print(y)
     Y = np.concatenate([y[:, :, np.newaxis], v[:, :, np.newaxis]], axis=-1)  # shape (n,m,2)
-    print("##################################################")
+    """
+    
+    #Need to inspect dimensions for the below block since i doubt i got it right first time
+    sqrt_eta = np.sqrt(x[np.newaxis, :, 2])
+    sqrt_1eta = np.sqrt(1-x[np.newaxis, :, 2])
+    #U_BS=np.array([[sqrt_eta[0][0],sqrt_1eta[0][0]],[sqrt_1eta[0][0],-sqrt_eta[0][0]]])
+    #Remember that exp_phi is an array not a scalar value
+    #U_PS=np.array([[exp_phi,0],[0,1]])
+    #print(exp_phi[0][0])
+    #U_PS=np.array([[exp_phi[0][0],0],[0,1]])
+    #print(U_PS)
+    #print(U_BS)
+    #U=U_BS@U_PS
+    #P1=abs(U[0][0])**2
+    #P2=abs(U[1][0])**2
+    #print(P1) 
+    #print(P2)
+
+    #If we are putting PS before BS:
+    P1=np.abs(sqrt_eta*exp_phi)**2 #need to sort out dims since this is absoluting and squaring whole array
+    P2=np.abs(sqrt_1eta*exp_phi)**2
+    
+    #print(P1+P2) 
+    #print(exp_phi)
+    #print(sqrt_eta)
+    #print()
+    #print(sqrt_eta*exp_phi)
+    #print(P1) #looks like the same value but is actually slightly different each time, maybe exp_phi isn't wide enough range?
+    #print(P2)
+    #print()
+    #P = np.cumsum(P1, axis=0)
+    y=np.concatenate(P1,P2,axis=0)
+    #print(y)
+    Y = np.concatenate([y[:, :, np.newaxis], v[:, :, np.newaxis]], axis=-1)  # shape (n,m,2)
+    
     return Y
 
 

@@ -89,7 +89,7 @@ def data_draw(x, n):
 # x: scalar parameter we want to estimate, shape (m, 3)
 def loglikelihood(y, x):
     #phi = x[np.newaxis, :, 0] * y[:, np.newaxis, 1]**2 + x[np.newaxis, :, 1]  # a * V^2 + b, shape (n, m)
-    phi = x[np.newaxis, :, 0] + + x[np.newaxis, :, 1] * y[:, np.newaxis, 1]**2   # a * V^2 + b, shape (n, m)
+    phi = x[np.newaxis, :, 0] + x[np.newaxis, :, 1] * y[:, np.newaxis, 1]**2   # a + b*V^2, shape (n, m)
     exp_phi = np.exp(1j*phi)
     # here we can possibly test unrealistic values leading to negative sqrt, so numerical result is unreliable
     # however for such values, the prior should be such that these points will always be rejected in the acceptance test
