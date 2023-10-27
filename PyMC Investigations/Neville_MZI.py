@@ -9,6 +9,8 @@ Maybe as my proposal situation i shall try and simulate some kind of binomial
 situation like a coin flip and have continuous proposal for probability
 
 Have been experimenting with different initial values for priors, all prove that it isn't just sampling priors. Will also experiment with different mu for normal distributions to show this. Now i have HMC code working could be a good idea to think on how to apply this to something, maybe comparing to other sampling methods?
+
+eta definitely updates, a and b don't?
 """
 
 
@@ -60,9 +62,12 @@ V_dist=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 
 #V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
 V=V_dist
 
-a_true=0
-b_true=0.788
-eta_true=0.447
+#a_true=0
+#b_true=0.788
+#eta_true=0.447
+eta_true=np.random.normal(loc=0.5,scale=0.05)
+a_true=np.random.uniform(low=-np.pi,high=np.pi)
+b_true=np.random.normal(loc=0.7,scale=0.07)
 
 def DataGen(InputNumber, Voltages, poissonian=True): #InputNumber=# of input photons= should average to about 1000
     data=np.empty((N,M))
@@ -97,10 +102,10 @@ data,C,P=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 with pm.Model() as model_multinomial:
     # Define priors
     #eta = pm.Normal("eta", mu=0.5, sigma=0.05,initval=0.5)
-    eta=pm.TruncatedNormal("eta",mu=0.5,sigma=0.05,lower=0.0,upper=1.0,initval=0.7)
-    #a= pm.Uniform("a", lower=-np.pi, upper=np.pi,initval=0)
-    a= pm.Normal("a", mu=0, sigma=np.pi/200,initval=0.5)
-    b= pm.Normal("b", mu=0.7, sigma=0.07,initval=0.75)
+    eta=pm.TruncatedNormal("eta",mu=0.6,sigma=0.05,lower=0.0,upper=1.0,initval=0.7)
+    a= pm.Uniform("a", lower=-np.pi, upper=np.pi,initval=0)
+    #a= pm.Normal("a", mu=0.1, sigma=np.pi/200,initval=0.5)
+    b= pm.Normal("b", mu=0.5, sigma=0.07,initval=0.75)
     
     Volt=pm.Deterministic("Volt",pt.as_tensor(V_dist))
     phi=pm.Deterministic("phi",(a+b*pm.math.sqr(Volt)))
@@ -118,4 +123,18 @@ with model_multinomial:
     trace_multinomial = pm.sample(draws=int(5e3), chains=4, cores=1,return_inferencedata=True)
     prior = pm.sample_prior_predictive()
     
-az.plot_trace(data=trace_multinomial,var_names=["eta","a","b"])
+
+
+lines={"eta":eta_true,"a":a_true,"b":b_true}
+#note that you have to specify var_names otherwise it will plot all the deterministic nodes as well and screw up plot ordering
+ax=az.plot_trace(data=trace_multinomial,var_names=["eta","a","b"])
+#ax[0,0].axvline(x=eta1_true)
+for i,(k,v) in enumerate(lines.items()):
+    ax[i,0].axvline(x=v,c="red")
+    ax[i,1].axhline(y=v,c="red")
+#az.plot_posterior(idata)
+#az.summary(idata, round_to=2)
+#az.plot_ess(idata)
+
+#note that you have to specify var_names otherwise it will plot all the deterministic nodes as well and screw up plot ordering
+#az.plot_trace(data=trace_multinomial,var_names=["eta","a","b"])
