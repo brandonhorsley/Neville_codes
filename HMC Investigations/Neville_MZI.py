@@ -1,16 +1,20 @@
 """
-Code block to practice implementing categorical likelihood with 
-continuous parameters.
+Code for HMC sampling of MZI with Neville style set up for characterising 
+photonic chips.
 
-https://www.pymc.io/projects/docs/en/v3/pymc-examples/examples/mixture_models/dirichlet_mixture_of_multinomials.html
-https://gist.github.com/jeetsukumaran/2840020
 
-Maybe as my proposal situation i shall try and simulate some kind of binomial 
-situation like a coin flip and have continuous proposal for probability
+Active notes:
 
-Have been experimenting with different initial values for priors, all prove that it isn't just sampling priors. Will also experiment with different mu for normal distributions to show this. Now i have HMC code working could be a good idea to think on how to apply this to something, maybe comparing to other sampling methods?
+Issue with p. Turns out it is because pytensor doesn't handle complex values 
+nicely so it catches the occurrence of complex values as an error. As a 
+result i had to pose my p differently following suggestion from a forum: 
+https://discourse.pymc.io/t/elemwise-abs-no-inplace-grad-error-for-multinomial-likelihood/13173/2
 
-eta definitely updates, a and b don't?
+Have been experimenting with different initial values for priors, all prove 
+that it isn't just sampling priors. Will also experiment with different mu 
+for normal distributions to show this. Now i have HMC code working could be 
+a good idea to think on how to apply this to something, maybe comparing to 
+other sampling methods? eta definitely updates, but a and b don't?
 """
 
 
