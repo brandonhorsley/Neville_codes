@@ -93,7 +93,7 @@ def data_draw(x, n):
     #print(P2)
     #print()
     #P = np.cumsum(P1, axis=0)
-    y=np.concatenate(P1,P2,axis=0)
+    y=np.concatenate([P1,P2],axis=0)
     #print(y)
     Y = np.concatenate([y[:, :, np.newaxis], v[:, :, np.newaxis]], axis=-1)  # shape (n,m,2)
     

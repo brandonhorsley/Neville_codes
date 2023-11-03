@@ -66,12 +66,12 @@ V_dist=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 
 #V=V_dist+rng.normal(scale=0.02, size=N) #Adding gaussian noise, top of page 108 says 2% voltage noise
 V=V_dist
 
-#a_true=0
-#b_true=0.788
-#eta_true=0.447
-eta_true=np.random.normal(loc=0.5,scale=0.05)
-a_true=np.random.uniform(low=-np.pi,high=np.pi)
-b_true=np.random.normal(loc=0.7,scale=0.07)
+a_true=0
+b_true=0.788
+eta_true=0.447
+#eta_true=np.random.normal(loc=0.5,scale=0.05)
+#a_true=np.random.uniform(low=-np.pi,high=np.pi)
+#b_true=np.random.normal(loc=0.7,scale=0.07)
 
 def DataGen(InputNumber, Voltages, poissonian=True): #InputNumber=# of input photons= should average to about 1000
     data=np.empty((N,M))
@@ -137,7 +137,7 @@ for i,(k,v) in enumerate(lines.items()):
     ax[i,0].axvline(x=v,c="red")
     ax[i,1].axhline(y=v,c="red")
 #az.plot_posterior(idata)
-#az.summary(idata, round_to=2)
+az.summary(trace_multinomial, round_to=2)
 #az.plot_ess(idata)
 
 #note that you have to specify var_names otherwise it will plot all the deterministic nodes as well and screw up plot ordering
