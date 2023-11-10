@@ -6,6 +6,8 @@ Active notes:
 Will only really need to change data draw and loglikelihood, also remember that all we are really doing by getting probability from unitary is extracting the first column (since light is put in the first mode)
 
 First attempt on changing data draw, will need to comb through and make sure the vectorisation is appropriate.Not only that but also since we are moving into fock basis will need to edit to put more photons in rather than the click of no click from the coherent state example?
+
+Looks like this code may be abandoned since with the project looking more in a boson sampling direction, the bayesian stuff isn't necessary so we may as well start from scratch.
 """
 
 import numpy as np
