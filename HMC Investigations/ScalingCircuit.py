@@ -100,5 +100,5 @@ def Reck(*arg):
     r,c=0,0 #this should be to index the appropriate mode numbers for where the AMZI is
     T[r:r+mat.shape[0], c:c+mat.shape[1]] += mat
 
-def p_calculator():
+def p_calculator(): #Maybe argument should be unitary and taking the input mode(s) and output mode(s) to index
     pass
