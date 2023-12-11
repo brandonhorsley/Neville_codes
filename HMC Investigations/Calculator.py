@@ -42,7 +42,11 @@ np.random.seed(0)
 #U = bs.compute_unitary(use_symbolic=True)
 #pcvl.pdisplay(U)
 
-N=4
-bs = pcvl.Circuit.generic_interferometer(N, lambda idx : pcvl.BS(theta=pcvl.P("theta_%d"%idx))//(0, pcvl.PS(pcvl.P("phi_%d"%idx))), shape="rectangle", depth = 2*N)
-#pcvl.pdisplay(bs, recursive = True)
-pcvl.pdisplay(bs.U)
+N=2
+#bs = pcvl.Circuit.generic_interferometer(N, lambda idx : pcvl.BS(theta=pcvl.P("theta_%d"%idx))//(0, pcvl.PS(pcvl.P("phi_%d"%idx))), shape="rectangle", depth = 2*N)
+#Standard Clements scheme
+bs = pcvl.Circuit.generic_interferometer(N, lambda idx : pcvl.BS(theta=pcvl.P("theta_%d"%(2*idx)))//(0, pcvl.PS(pcvl.P("phi_%d"%(2*idx))))//pcvl.BS(theta=pcvl.P("theta_%d"%(2*idx+1)))//(0, pcvl.PS(pcvl.P("phi_%d"%(2*idx+1)))), shape="rectangle")
+#Standard Reck scheme
+#bs = pcvl.Circuit.generic_interferometer(N, lambda idx : pcvl.BS(theta=pcvl.P("theta_%d"%(2*idx)))//(0, pcvl.PS(pcvl.P("phi_%d"%(2*idx))))//pcvl.BS(theta=pcvl.P("theta_%d"%(2*idx+1)))//(0, pcvl.PS(pcvl.P("phi_%d"%(2*idx+1)))), shape="triangle")
+
+pcvl.pdisplay(bs, recursive = True)
