@@ -1,5 +1,5 @@
 """
-This code file will be for my unitary calculator. I will use the perceval framework from quandela.
+This code file will be for my unitary calculator. i will use the perceval framework from quandela.
 
 It occurs to me that a good way of going about it for my purposes is to just drum up some Haar-random unitary (with dimensions given by circuit mode number) and then do circuit decomposition from quandela. So then i should be able to obtain 'true values' for the program to infer, although then it isn't symbolically.
 """
