@@ -9,6 +9,7 @@ Starting with N=2, for this there is only theta_0,theta_1,phi_0. For N=3:theta_0
 No arccos in pymc math function, Have made a post on the forum. Solution found at https://discourse.pymc.io/t/no-inverse-trig-in-pm-math-functions/13681/3
 Have plugged in expressions, busywork done via search and replace, lots of lines of code means file is running slow so maybe it would be worth changing as a python expression but probably won't be necessary since this is only a proof of principle test and i need a much better workflow for this in general.
 Got code working, still needs some polish.
+For postprocessing data at the end, I am currently setting it to just work the data for one of the chains first per variable per sampling method. LAter on I can combine them or just do the postprocessing for all of them
 """
 
 import arviz as az
@@ -188,203 +189,251 @@ with pm.Model() as model_multinomial2:
 
 
 with model_multinomial1:
-    trace_multinomial_2_HMC = pm.sample(draws=int(5e3), chains=4, cores=1,return_inferencedata=True)
-    trace_multinomial_2_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=4, cores=1, return_inferencedata=True)
+    trace_multinomial_2_HMC = pm.sample(draws=int(5e3), chains=2, cores=1,return_inferencedata=True)
+    trace_multinomial_2_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=1, return_inferencedata=True)
 
 with model_multinomial2:
-    trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=4, cores=1,return_inferencedata=True)
-    trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=4, cores=1, return_inferencedata=True)
+    trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=2, cores=2,return_inferencedata=True)
+    trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=1, return_inferencedata=True)
+
+
+#az.plot_trace(data=trace_multinomial_2_HMC,var_names=["eta","a","b"])
+
+#az.plot_trace(data=trace_multinomial_2_Metropolis,var_names=["eta","a","b"])
 
 #Postprocessing (doing relevant transforms and obtaining things)
 #Will need to retransform theta back to reflectivity eta via eta=cos**2(theta/2)
-eta_HMC_2_data=trace_multinomial_2_HMC.posterior["eta"]
-a_HMC_2_data=trace_multinomial_2_HMC.posterior["a"]
-b_HMC_2_data=trace_multinomial_2_HMC.posterior["b"]
 
-eta_M_2_data=trace_multinomial_2_Metropolis.posterior["eta"]
-a_M_2_data=trace_multinomial_2_Metropolis.posterior["a"]
-b_M_2_data=trace_multinomial_2_Metropolis.posterior["b"]
+eta_HMC_2_data=trace_multinomial_2_HMC.posterior["eta"].values
+a_HMC_2_data=trace_multinomial_2_HMC.posterior["a"].values
+b_HMC_2_data=trace_multinomial_2_HMC.posterior["b"].values
+
+eta_M_2_data=trace_multinomial_2_Metropolis.posterior["eta"].values
+a_M_2_data=trace_multinomial_2_Metropolis.posterior["a"].values
+b_M_2_data=trace_multinomial_2_Metropolis.posterior["b"].values
 
 
 
-eta_HMC_3_data=trace_multinomial_3_HMC.posterior["eta"]
-a_HMC_3_data=trace_multinomial_3_HMC.posterior["a"]
-b_HMC_3_data=trace_multinomial_3_HMC.posterior["b"]
 
-eta_M_3_data=trace_multinomial_3_Metropolis.posterior["eta"]
-a_M_3_data=trace_multinomial_3_Metropolis.posterior["a"]
-b_M_3_data=trace_multinomial_3_Metropolis.posterior["b"]
+eta_HMC_3_data=trace_multinomial_3_HMC.posterior["eta"].values
+a_HMC_3_data=trace_multinomial_3_HMC.posterior["a"].values
+b_HMC_3_data=trace_multinomial_3_HMC.posterior["b"].values
+
+eta_M_3_data=trace_multinomial_3_Metropolis.posterior["eta"].values
+a_M_3_data=trace_multinomial_3_Metropolis.posterior["a"].values
+b_M_3_data=trace_multinomial_3_Metropolis.posterior["b"].values
 
 #Am going to take maximum as my point estimate which is pretty common (except in multimode cases), could take the mean if so desired
 
 #HMC
 etaHMC_2_max=[]
 etaHMC_2_mean=[]
-etaHMC_2_sd=[]
+etaHMC_2_std=[]
 aHMC_2_max=[]
 aHMC_2_mean=[]
-aHMC_2_sd=[]
+aHMC_2_std=[]
 bHMC_2_max=[]
 bHMC_2_mean=[]
-bHMC_2_sd=[]
+bHMC_2_std=[]
 
-for _ in range(len(eta_HMC_2_data)):
-    etaHMC_2_max.append(((np.max(eta_HMC_2_data[_])-eta_2_true[_])/eta_2_true[_])*100)
-    etaHMC_2_mean.append(eta_HMC_2_data[_].mean())
-    etaHMC_2_sd.append(eta_HMC_2_data[_].sd())
+def FindingMax(array): 
+    """
+    #In practice when using this function, multiple chain will lit to an array of matrices so you will need to index the specific chain you want the max for
+
+    Note that individual chains have serial dependence; values from separate chains don't, so if you wanted it to look like one long chain, just concatenating them wouldn't look right.
+
+    However, if you're just interested in the distribution, the order in the chain is irrelevant. You don't actually seek to concatenate the chains for that, you simply want to pool all the distributional information (treat them as one big sample). Certainly, if the chains are all converged to their stationary distribution, they'll all be samples from the same distribution -- you can combine those.
+
+    Indeed some people run a burn-in period and just draw a single value from many separate chains.
+
+    (Keeping the runs separate might help to judge if they actually have converged.)
+    """
+    kernel_a = scipy.stats.gaussian_kde(array)
+    a_range = np.linspace(min(array), max(array), 1000)
+    estimated_pdf_a = kernel_a.evaluate(a_range)  
+    res=a_range[np.argmax(estimated_pdf_a)]
+    return res
+
+for _ in range(len(eta_2_true)):
+    etaHMC_2_max.append(((FindingMax(eta_HMC_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100) #[0] index is indexing to get first chain
+    etaHMC_2_mean.append(eta_HMC_2_data[0][:,_].mean())
+    etaHMC_2_std.append(eta_HMC_2_data[0][:,_].std())
     
-for _ in range(len(a_HMC_2_data)):   
-    aHMC_2_max.append(((np.max(a_HMC_2_data[_])-a_2_true[_])/a_2_true[_])*100)
-    aHMC_2_mean.append(a_HMC_2_data[_].mean())
-    aHMC_2_sd.append(a_HMC_2_data[_].sd())
+for _ in range(len(a_2_true)):   
+    aHMC_2_max.append(((FindingMax(a_HMC_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100) 
+    aHMC_2_mean.append(a_HMC_2_data[0][:,_].mean())
+    aHMC_2_std.append(a_HMC_2_data[0][:,_].std())
     
-    bHMC_2_max.append(((np.max(b_HMC_2_data[_])-b_2_true[_])/b_2_true[_])*100)
-    bHMC_2_mean.append(b_HMC_2_data[_].mean())
-    bHMC_2_sd.append(b_HMC_2_data[_].sd())
+    bHMC_2_max.append(((FindingMax(b_HMC_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
+    bHMC_2_mean.append(b_HMC_2_data[0][:,_].mean())
+    bHMC_2_std.append(b_HMC_2_data[0][:,_].std())
 
 #Metropolis
 etaM_2_max=[]
 etaM_2_mean=[]
-etaM_2_sd=[]
+etaM_2_std=[]
 aM_2_max=[]
 aM_2_mean=[]
-aM_2_sd=[]
+aM_2_std=[]
 bM_2_max=[]
 bM_2_mean=[]
-bM_2_sd=[]
+bM_2_std=[]
 
-for _ in range(len(eta_M_2_data)):
-    etaM_2_max.append(((np.max(eta_M_2_data[_])-eta_2_true[_])/eta_2_true[_])*100)
-    etaM_2_mean.append(eta_M_2_data[_].mean())
-    etaM_2_sd.append(eta_M_2_data[_].sd())
+for _ in range(len(eta_2_true)):
+    etaM_2_max.append(((FindingMax(eta_M_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100)
+    etaM_2_mean.append(eta_M_2_data[0][:,_].mean())
+    etaM_2_std.append(eta_M_2_data[0][:,_].std())
     
-for _ in range(len(a_M_2_data)):   
-    aM_2_max.append(((np.max(a_M_2_data[_])-a_2_true[_])/a_2_true[_])*100)
-    aM_2_mean.append(a_M_2_data[_].mean())
-    aM_2_sd.append(a_M_2_data[_].sd())
+for _ in range(len(a_2_true)):   
+    aM_2_max.append(((FindingMax(a_M_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100)
+    aM_2_mean.append(a_M_2_data[0][:,_].mean())
+    aM_2_std.append(a_M_2_data[0][:,_].std())
     
-    bM_2_max.append(((np.max(b_M_2_data[_])-b_2_true[_])/b_2_true[_])*100)
-    bM_2_mean.append(b_M_2_data[_].mean())
-    bM_2_sd.append(b_M_2_data[_].sd())
+    bM_2_max.append(((FindingMax(b_M_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
+    bM_2_mean.append(b_M_2_data[0][:,_].mean())
+    bM_2_std.append(b_M_2_data[0][:,_].std())
 
 print("M=2")
-
+print()
+print("True values for eta:")
+print(eta_2_true)
 print("Percentage errors in eta under HMC")
 print(etaHMC_2_max)
 print("Means for eta under HMC is: {}".format(etaHMC_2_mean))
-print("Standard deviations for eta under HMC is: {}".format(etaHMC_2_sd))
+print("Standard deviations for eta under HMC is: {}".format(etaHMC_2_std))
 print()
+print("True values for a:")
+print(a_2_true)
 print("Percentage errors in a under HMC")
 print(aHMC_2_max)
-print("Means for eta under HMC is: {}".format(aHMC_2_mean))
-print("Standard deviations for eta under HMC is: {}".format(aHMC_2_sd))
+print("Means for a under HMC is: {}".format(aHMC_2_mean))
+print("Standard deviations for a under HMC is: {}".format(aHMC_2_std))
 print()
+print("True values for b:")
+print(b_2_true)
 print("Percentage errors in b under HMC")
 print(bHMC_2_max)
-print("Means for eta under HMC is: {}".format(bHMC_2_mean))
-print("Standard deviations for eta under HMC is: {}".format(bHMC_2_sd))
+print("Means for b under HMC is: {}".format(bHMC_2_mean))
+print("Standard deviations for b under HMC is: {}".format(bHMC_2_std))
 
 print()
 print()
-
+print("True values for eta:")
+print(eta_2_true)
 print("Percentage errors in eta under Metropolis")
 print(etaM_2_max)
 print("Means for eta under Metropolis is: {}".format(etaM_2_mean))
-print("Standard deviations for eta under Metropolis is: {}".format(etaM_2_sd))
+print("Standard deviations for eta under Metropolis is: {}".format(etaM_2_std))
 print()
+print("True values for a:")
+print(a_2_true)
 print("Percentage errors in a under Metropolis")
 print(aM_2_max)
 print("Means for a under Metropolis is: {}".format(aM_2_mean))
-print("Standard deviations for a under Metropolis is: {}".format(aM_2_sd))
+print("Standard deviations for a under Metropolis is: {}".format(aM_2_std))
 print()
+print("True values for b:")
+print(b_2_true)
 print("Percentage errors in b under Metropolis")
 print(bM_2_max)
 print("Means for b under Metropolis is: {}".format(bM_2_mean))
-print("Standard deviations for b under Metropolis is: {}".format(bM_2_sd))
+print("Standard deviations for b under Metropolis is: {}".format(bM_2_std))
 
 
 
 #HMC
 etaHMC_3_max=[]
 etaHMC_3_mean=[]
-etaHMC_3_sd=[]
+etaHMC_3_std=[]
 aHMC_3_max=[]
 aHMC_3_mean=[]
-aHMC_3_sd=[]
+aHMC_3_std=[]
 bHMC_3_max=[]
 bHMC_3_mean=[]
-bHMC_3_sd=[]
+bHMC_3_std=[]
 
-for _ in range(len(eta_HMC_3_data)):
-    etaHMC_2_max.append(((np.max(eta_HMC_3_data[_])-eta_2_true[_])/eta_2_true[_])*100)
-    etaHMC_2_mean.append(eta_HMC_3_data[_].mean())
-    etaHMC_2_sd.append(eta_HMC_3_data[_].sd())
+for _ in range(len(eta_3_true)):
+    etaHMC_3_max.append(((FindingMax(eta_HMC_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100)
+    etaHMC_3_mean.append(eta_HMC_3_data[0][:,_].mean())
+    etaHMC_3_std.append(eta_HMC_3_data[0][:,_].std())
     
-for _ in range(len(a_HMC_3_data)):   
-    aHMC_2_max.append(((np.max(a_HMC_3_data[_])-a_2_true[_])/a_2_true[_])*100)
-    aHMC_2_mean.append(a_HMC_3_data[_].mean())
-    aHMC_2_sd.append(a_HMC_3_data[_].sd())
+for _ in range(len(a_3_true)):   
+    aHMC_3_max.append(((np.max(a_HMC_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100)
+    aHMC_3_mean.append(a_HMC_3_data[0][:,_].mean())
+    aHMC_3_std.append(a_HMC_3_data[0][:,_].std())
     
-    bHMC_2_max.append(((np.max(b_HMC_3_data[_])-b_2_true[_])/b_2_true[_])*100)
-    bHMC_2_mean.append(b_HMC_3_data[_].mean())
-    bHMC_2_sd.append(b_HMC_3_data[_].sd())
+    bHMC_3_max.append(((np.max(b_HMC_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
+    bHMC_3_mean.append(b_HMC_3_data[0][:,_].mean())
+    bHMC_3_std.append(b_HMC_3_data[0][:,_].std())
 
 #Metropolis
 etaM_3_max=[]
 etaM_3_mean=[]
-etaM_3_sd=[]
+etaM_3_std=[]
 aM_3_max=[]
 aM_3_mean=[]
-aM_3_sd=[]
+aM_3_std=[]
 bM_3_max=[]
 bM_3_mean=[]
-bM_3_sd=[]
+bM_3_std=[]
 
-for _ in range(len(eta_M_3_data)):
-    etaM_3_max.append(((np.max(eta_M_3_data[_])-eta_3_true[_])/eta_3_true[_])*100)
-    etaM_3_mean.append(eta_M_3_data[_].mean())
-    etaM_3_sd.append(eta_M_3_data[_].sd())
+for _ in range(len(eta_3_true)):
+    etaM_3_max.append(((np.max(eta_M_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100)
+    etaM_3_mean.append(eta_M_3_data[0][:,_].mean())
+    etaM_3_std.append(eta_M_3_data[0][:,_].std())
     
-for _ in range(len(a_M_3_data)):   
-    aM_3_max.append(((np.max(a_M_3_data[_])-a_3_true[_])/a_3_true[_])*100)
-    aM_3_mean.append(a_M_3_data[_].mean())
-    aM_3_sd.append(a_M_3_data[_].sd())
+for _ in range(len(a_3_true)):   
+    aM_3_max.append(((np.max(a_M_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100)
+    aM_3_mean.append(a_M_3_data[0][:,_].mean())
+    aM_3_std.append(a_M_3_data[0][:,_].std())
     
-    bM_3_max.append(((np.max(b_M_3_data[_])-b_3_true[_])/b_3_true[_])*100)
-    bM_3_mean.append(b_M_3_data[_].mean())
-    bM_3_sd.append(b_M_3_data[_].sd())
+    bM_3_max.append(((np.max(b_M_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
+    bM_3_mean.append(b_M_3_data[0][:,_].mean())
+    bM_3_std.append(b_M_3_data[0][:,_].std())
 
 print("M=3")
-
+print()
+print("True values for eta:")
+print(eta_3_true)
 print("Percentage errors in eta under HMC")
 print(etaHMC_3_max)
 print("Means for eta under HMC is: {}".format(etaHMC_3_mean))
-print("Standard deviations for eta under HMC is: {}".format(etaHMC_3_sd))
+print("Standard deviations for eta under HMC is: {}".format(etaHMC_3_std))
 print()
+print("True values for a:")
+print(a_3_true)
 print("Percentage errors in a under HMC")
 print(aHMC_3_max)
 print("Means for eta under HMC is: {}".format(aHMC_3_mean))
-print("Standard deviations for eta under HMC is: {}".format(aHMC_3_sd))
+print("Standard deviations for eta under HMC is: {}".format(aHMC_3_std))
 print()
+print("True values for b:")
+print(b_3_true)
 print("Percentage errors in b under HMC")
 print(bHMC_3_max)
 print("Means for eta under HMC is: {}".format(bHMC_3_mean))
-print("Standard deviations for eta under HMC is: {}".format(bHMC_3_sd))
+print("Standard deviations for eta under HMC is: {}".format(bHMC_3_std))
 
 print()
 print()
 
+print("True values for eta:")
+print(eta_3_true)
 print("Percentage errors in eta under Metropolis")
 print(etaM_3_max)
 print("Means for eta under Metropolis is: {}".format(etaM_3_mean))
-print("Standard deviations for eta under Metropolis is: {}".format(etaM_3_sd))
+print("Standard deviations for eta under Metropolis is: {}".format(etaM_3_std))
 print()
+print("True values for a:")
+print(a_3_true)
 print("Percentage errors in a under Metropolis")
 print(aM_3_max)
 print("Means for a under Metropolis is: {}".format(aM_3_mean))
-print("Standard deviations for a under Metropolis is: {}".format(aM_3_sd))
+print("Standard deviations for a under Metropolis is: {}".format(aM_3_std))
 print()
+print("True values for b:")
+print(b_3_true)
 print("Percentage errors in b under Metropolis")
 print(bM_3_max)
 print("Means for b under Metropolis is: {}".format(bM_3_mean))
-print("Standard deviations for b under Metropolis is: {}".format(bM_3_sd))
+print("Standard deviations for b under Metropolis is: {}".format(bM_3_std))
