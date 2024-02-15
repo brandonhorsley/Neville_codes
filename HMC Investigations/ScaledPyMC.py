@@ -9,7 +9,9 @@ Starting with N=2, for this there is only theta_0,theta_1,phi_0. For N=3:theta_0
 No arccos in pymc math function, Have made a post on the forum. Solution found at https://discourse.pymc.io/t/no-inverse-trig-in-pm-math-functions/13681/3
 Have plugged in expressions, busywork done via search and replace, lots of lines of code means file is running slow so maybe it would be worth changing as a python expression but probably won't be necessary since this is only a proof of principle test and i need a much better workflow for this in general.
 Got code working, still needs some polish.
-For postprocessing data at the end, I am currently setting it to just work the data for one of the chains first per variable per sampling method. LAter on I can combine them or just do the postprocessing for all of them
+For postprocessing data at the end, I am currently setting it to just work the data for one of the chains first per variable per sampling method. Later on I can combine them or just do the postprocessing for all of them
+Code seems to suffer a lot on M=2 with one of the eta estimates coming out to be 0.1, could be that the probability part for one of the phi's cancels out. Same with M=3 now i have noticed, it is deffo the term at the end that gets cancelled because it is just a phase shift that isn't physically observable so its fine. But then why M=2 still suffers is curious, i have bumped up the number of voltage experiments to see if it solves the issue. 
+Also taking percentage errors and standard deviations seem to show that HMC isn't really providing much of an advantage, especially considering HMC is taking longer to do its samples, could be to do with the fact that the starting guess is basically where the true value is, so convergence is more of a null factor? But pushing your starting guess further away then leads to convergence on the wrong peak since the distribution is multimodal?
 """
 
 import arviz as az
@@ -18,7 +20,6 @@ import numpy as np
 import pymc as pm
 import scipy as sp
 import scipy.stats
-#import seaborn as sns
 import pytensor.tensor as pt
 
 RANDOM_SEED = 0
@@ -29,11 +30,10 @@ az.style.use("arviz-darkgrid")
 #####################Data generation
 
 Vmax=10
-N=10 #Top of page 108 ->N=number of experiments
-M=2 #Number of modes
+N=100 #Top of page 108 ->N=number of experiments
 
 
-V_2_dist=np.random.uniform(low=0, high=Vmax,size=N)
+V_2_dist=np.random.uniform(low=0, high=Vmax,size=2*N).reshape(2,N)
 #V_dist+=rng.normal(scale=0.02, size=(12,N)) #Adding gaussian noise, top of page 108 says 2% voltage noise
 V_3_dist=np.random.uniform(low=0, high=Vmax,size=5*N).reshape(5,N)
 #V_dist+=rng.normal(scale=0.02, size=(12,N)) #Adding gaussian noise, top of page 108 says 2% voltage noise
@@ -42,9 +42,9 @@ V_3_dist=np.random.uniform(low=0, high=Vmax,size=5*N).reshape(5,N)
 
 eta_2_true=[np.random.normal(loc=0.5,scale=0.05) for i in range(2)]
 theta_2_true=2*np.arccos(np.sqrt(eta_2_true))
-a_2_true=[np.random.normal(loc=0,scale=np.pi/200) for i in range(1)]
+a_2_true=[np.random.normal(loc=0,scale=np.pi/200) for i in range(2)]
 #print(a_2_true[0])
-b_2_true=[np.random.normal(loc=0.7,scale=0.07) for i in range(1)]
+b_2_true=[np.random.normal(loc=0.7,scale=0.07) for i in range(2)]
 
 
 eta_2_est=eta_2_true+np.random.normal(loc=0,scale=0.05,size=len(eta_2_true))
@@ -66,36 +66,30 @@ b_3_est=b_3_true+np.random.normal(loc=0,scale=0.07,size=len(b_3_true))
 
 def DataGen(InputNumber, Voltages1,Voltages2, poissonian=True): #InputNumber=# of input photons= should average to about 1000
 
-    #Need to output data/counts, will do through the sympy expressions and substitute in values
-
     #M=2
 
-    phi_2_true=a_2_true+b_2_true*np.square(Voltages1) #phi=a+bV**2
-    P_click1_true=-np.sin(theta_2_true[0])*np.sin(theta_2_true[1])*np.cos(phi_2_true)/2 + np.cos(theta_2_true[0])*np.cos(theta_2_true[1])/2 + 1/2
-    P_click2_true=-np.cos(theta_2_true[0] - theta_2_true[1])/4 - np.cos(theta_2_true[0] + theta_2_true[1])/4 - np.cos(-phi_2_true + theta_2_true[0] + theta_2_true[1])/8 + np.cos(phi_2_true - theta_2_true[0] + theta_2_true[1])/8 + np.cos(phi_2_true + theta_2_true[0] - theta_2_true[1])/8 - np.cos(phi_2_true + theta_2_true[0] + theta_2_true[1])/8 + 1/2
-    #print(P_click1_true) #shape 10x10, phi has length 10 due to voltages, and 10 due
-    #print(P_click2_true) #10
-    P_true_2=np.array([P_click1_true,P_click2_true])
-    #print(P_true_2)
-    P_2=P_true_2.reshape(N,2)
-    #print(P_2)
+    #phi_2_true=a_2_true+b_2_true*np.square(Voltages1) #phi=a+bV**2
+    phi_2_true=np.square(Voltages1)
+    #print(phi_2_true)
+    for _ in range(len(phi_2_true)):
+        phi_2_true[_]= a_2_true[_]+b_2_true[_]*phi_2_true[_]
     
-    #print(len(P_2))#200 because 2 len=10s and flatten means*100
+    P_click1_true=-np.sin(theta_2_true[0])*np.sin(theta_2_true[1])*np.cos(phi_2_true[0])/2 + np.cos(theta_2_true[0])*np.cos(theta_2_true[1])/2 + 1/2
+    P_click2_true=-np.cos(theta_2_true[0] - theta_2_true[1])/4 - np.cos(theta_2_true[0] + theta_2_true[1])/4 - np.cos(-phi_2_true[0] + theta_2_true[0] + theta_2_true[1])/8 + np.cos(phi_2_true[0] - theta_2_true[0] + theta_2_true[1])/8 + np.cos(phi_2_true[0] + theta_2_true[0] - theta_2_true[1])/8 - np.cos(phi_2_true[0] + theta_2_true[0] + theta_2_true[1])/8 + 1/2
+    P_true_2=[P_click1_true,P_click2_true]
+    P_2=np.transpose(np.row_stack(P_true_2))
     #n=C,p=P,x=array of clicks
-    #In=[InputNumber for _ in range(N)]
     data_2=[]
+    C_2=[]
     for i in range(N):
         data_2.append(scipy.stats.multinomial.rvs(n=InputNumber,p=P_2[i]))
-    #data_2=scipy.stats.multinomial.rvs(n=In,p=P_2)
+        C_2.append(np.sum(data_2[i]))
     #Need to add poissonian noise
     #if poissonian==True:
     #    data[i]+=rng.poisson(size=len(data[i]))
-    C_2=np.sum(data_2)
 
     #M=3
 
-    #phi_3 will be tricky, Voltage is length 10, a and b are length 5, I want a[0]+b[0]*np.square(voltages[0])
-    #phi_3_true=a_3_true+(b_3_true,np.square(Voltages2)) #phi=a+bV**2
     phi_3_true=np.square(Voltages2)
     for _ in range(len(phi_3_true)):
         phi_3_true[_]= a_3_true[_]+b_3_true[_]*phi_3_true[_]
@@ -103,29 +97,27 @@ def DataGen(InputNumber, Voltages1,Voltages2, poissonian=True): #InputNumber=# o
     P_click2_true=4*np.sin(phi_3_true[0])*np.sin(phi_3_true[1])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[2] + phi_3_true[3]) + 4*np.sin(phi_3_true[0])*np.sin(phi_3_true[1])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[2] + phi_3_true[3]) - 2*np.sin(phi_3_true[0])*np.sin(phi_3_true[1])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.cos(phi_3_true[2])*np.cos(phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2) + 2*np.sin(phi_3_true[0])*np.sin(phi_3_true[2])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) - 2*np.sin(phi_3_true[0])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[1] + phi_3_true[4])*np.cos(phi_3_true[2])*np.cos(phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) + 2*np.sin(phi_3_true[0])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[2] + phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] + phi_3_true[4]) + 2*np.sin(phi_3_true[1])*np.sin(phi_3_true[2])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[3] - phi_3_true[4]) + 2*np.sin(phi_3_true[1])*np.sin(phi_3_true[2])*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[3] - phi_3_true[4]) + 4*np.sin(phi_3_true[1])*np.sin(phi_3_true[4])*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[2] + phi_3_true[3]) + 4*np.sin(phi_3_true[1])*np.sin(phi_3_true[4])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[2] + phi_3_true[3]) - 2*np.sin(phi_3_true[1])*np.sin(phi_3_true[4])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[2])*np.cos(phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(phi_3_true[1])*np.sin(phi_3_true[4])*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[2])*np.cos(phi_3_true[3])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(phi_3_true[2])*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[1])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2) - 2*np.sin(phi_3_true[2])*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[1])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(phi_3_true[2])*np.sin(phi_3_true[3])*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[1])*np.cos(phi_3_true[4])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(phi_3_true[2])*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[1] - phi_3_true[3])*np.cos(phi_3_true[4])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(phi_3_true[2])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[1] - phi_3_true[3])*np.cos(phi_3_true[0])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(phi_3_true[2])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[0] - phi_3_true[3])*np.cos(phi_3_true[1])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(phi_3_true[2])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.sin(phi_3_true[0] - phi_3_true[3])*np.cos(phi_3_true[1])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2) - 4*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[1] + phi_3_true[4])*np.cos(phi_3_true[2])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[1] + phi_3_true[4])*np.cos(phi_3_true[0])*np.cos(phi_3_true[2])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[0] + phi_3_true[1])*np.cos(phi_3_true[2])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.sin(phi_3_true[0] + phi_3_true[1])*np.cos(phi_3_true[2])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2) + 2*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.sin(phi_3_true[0] + phi_3_true[1])*np.cos(phi_3_true[2])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2) + 2*np.sin(phi_3_true[3])*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[1] + phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[0] - phi_3_true[2]) + 2*np.sin(phi_3_true[3])*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.sin(phi_3_true[1] + phi_3_true[4])*np.cos(phi_3_true[2])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2) - 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2 + 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2 - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2 + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2 - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[5]/2)**2 + 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2 + 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[2])*np.cos(phi_3_true[4])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2 - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2 + 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2 - 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)**2 + 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[5]/2)**2 - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)**2 - 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) - 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] - phi_3_true[3] + phi_3_true[4]) + 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) + 8*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[1])*np.cos(phi_3_true[3])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[2] - phi_3_true[4]) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2 - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2 + 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2 - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 + np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2 + 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[5]/2)**2 - np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)**2 - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[2])*np.cos(phi_3_true[4])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 + np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2 + 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2 - np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[3]/2)**2 + 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[4]/2)**2 - 4*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(theta_3_true[0]/2)**2*np.sin(theta_3_true[5]/2)**2 + np.sin(theta_3_true[0]/2)**2 - 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) - 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] - phi_3_true[3] + phi_3_true[4]) + 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) + 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[1])*np.cos(phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[2] - phi_3_true[4]) + 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(phi_3_true[2])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[0])*np.cos(phi_3_true[2])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[2])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(phi_3_true[2])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[2])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[3]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) - 8*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[1]/2)*np.cos(phi_3_true[0])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[1]/2) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[0] + phi_3_true[1] - phi_3_true[3]) + 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[0] + phi_3_true[1] - phi_3_true[3]) - 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[0] + phi_3_true[1] - phi_3_true[3]) - 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[0] + phi_3_true[1] - phi_3_true[3] + phi_3_true[4]) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[3])*np.cos(phi_3_true[4])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] - phi_3_true[2]) - 4*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[0])*np.cos(phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[2]) + 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[4]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[2]) + 2*np.sin(theta_3_true[0]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[0])*np.cos(phi_3_true[1])*np.cos(phi_3_true[3])*np.cos(theta_3_true[0]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[2] - phi_3_true[4]) + 4*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 - 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2 - 4*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2 + 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[3]/2)**2 - 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 + np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)**2 + 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2*np.sin(theta_3_true[5]/2)**2 - np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)**2 - 4*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) + 4*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[2])*np.cos(phi_3_true[4])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.cos(phi_3_true[2])*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2) - 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 + np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)**2 + 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2*np.sin(theta_3_true[5]/2)**2 - np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[3]/2)**2 + 4*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 - 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)**2 - 4*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) - 2*np.sin(theta_3_true[1]/2)**2*np.sin(theta_3_true[5]/2)**2 + np.sin(theta_3_true[1]/2)**2 + 4*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) + 4*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) - 2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[4]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[4]/2)*np.cos(phi_3_true[1] - phi_3_true[3]) - 2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[2]/2)*np.sin(theta_3_true[3]/2)*np.sin(theta_3_true[5]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[1] - phi_3_true[3] + phi_3_true[4]) - 4*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) - 4*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)**2*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) + 2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[4]/2)*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[4]/2)*np.cos(-phi_3_true[1] + phi_3_true[2] + phi_3_true[3]) + 2*np.sin(theta_3_true[1]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[1])*np.cos(phi_3_true[3])*np.cos(theta_3_true[1]/2)*np.cos(theta_3_true[2]/2)*np.cos(theta_3_true[3]/2)*np.cos(theta_3_true[5]/2)*np.cos(phi_3_true[2] - phi_3_true[4]) - 2*np.sin(theta_3_true[4]/2)**2*np.sin(theta_3_true[5]/2)**2 + np.sin(theta_3_true[4]/2)**2 + 2*np.sin(theta_3_true[4]/2)*np.sin(theta_3_true[5]/2)*np.cos(phi_3_true[4])*np.cos(theta_3_true[4]/2)*np.cos(theta_3_true[5]/2) + np.sin(theta_3_true[5]/2)**2
     P_click3_true=(-2*np.cos(theta_3_true[0] - theta_3_true[1]) - 2*np.cos(theta_3_true[0] + theta_3_true[1]) - np.cos(-phi_3_true[0] + theta_3_true[0] + theta_3_true[1]) + np.cos(phi_3_true[0] - theta_3_true[0] + theta_3_true[1]) + np.cos(phi_3_true[0] + theta_3_true[0] - theta_3_true[1]) - np.cos(phi_3_true[0] + theta_3_true[0] + theta_3_true[1]) + 4)*(-2*np.cos(theta_3_true[2] - theta_3_true[3]) - 2*np.cos(theta_3_true[2] + theta_3_true[3]) - np.cos(-phi_3_true[2] + theta_3_true[2] + theta_3_true[3]) + np.cos(phi_3_true[2] - theta_3_true[2] + theta_3_true[3]) + np.cos(phi_3_true[2] + theta_3_true[2] - theta_3_true[3]) - np.cos(phi_3_true[2] + theta_3_true[2] + theta_3_true[3]) + 4)/64
     P_true_3=[P_click1_true,P_click2_true,P_click3_true]
-    #print(P_click1_true)
-    #print(P_click2_true)
-    #print(P_click3_true)
     P_3=np.transpose(np.row_stack(P_true_3))
-    #P_3=P_true_3.reshape(N,3)
-    #print(P_3) #Don't add up to 1? But I also am pretty confident i haven't picked out the wrong terms?
-    
-    #print(len(P_2))#200 because 2 len=10s and flatten means*100
     #n=C,p=P,x=array of clicks
-    #In=[InputNumber for _ in range(N)]
     data_3=[]
+    C_3=[]
     for i in range(N):
         data_3.append(scipy.stats.multinomial.rvs(n=InputNumber,p=P_3[i]))
-    #data_2=scipy.stats.multinomial.rvs(n=In,p=P_2)
+        C_3.append(np.sum(data_3[i]))
     #Need to add poissonian noise
     #if poissonian==True:
     #    data[i]+=rng.poisson(size=len(data[i]))
-    C_3=np.sum(data_3)
 
     return data_2,C_2,P_2,data_3,C_3,P_3
 
 data_2,C_2,P_2,data_3,C_3,P_3=DataGen(InputNumber=1000,Voltages1=V_2_dist,Voltages2 = V_3_dist, poissonian=False)
-#data,C,P=DataGen(InputNumber=1000,Voltages=V_3_dist,poissonian=False)
+
+#print(data_2)
+#print(C_2)
+#print(P_2)
+#print(data_3)
+#print(C_3)
+#print(P_3)
 
 L_dev=4E-9 #delta L, chosen so it coincides with Alex's sd to be ~np.pi/200
 wv=1550E-9
@@ -142,24 +134,14 @@ with pm.Model() as model_multinomial1:
     b=pm.Normal("b", mu=b_2_est, sigma=0.07,initval=[0.7,0.7],shape=2) #array of priors for conciseness
     
     Volt=pm.Deterministic("Volt",pt.as_tensor(V_2_dist))
-    #phi=pm.Deterministic("phi",(a+pm.math.dot(b,pm.math.sqr(Volt)))) #still need to find math function so a[1],b[1] and row 1 of Volt is used...etc
-    #np.transpose(np.einsum('ij,ki->jki',V,b)) for product
-    #phi=pm.Deterministic("phi",(a+pt.tensordot(b,pm.math.sqr(Volt),axes=1))) #still need to find math function so a
-    #phi=pm.Deterministic("phi",np.transpose(np.einsum('ij,ki->jki',Volt,b)))
-    #phi=pm.Deterministic("phi",pt.subtensor.set_subtensor(Volt,))
-    #phi=pm.Deterministic("phi",pt.batched_tensordot(b,pm.math.sqr(Volt),axes=1))
-    #phi=pm.Deterministic("phi",a[:,None]+b[:,None]*pm.math.sqr(Volt))
-    phi=pm.Deterministic("phi",a[:,None]+b[:,None]*pm.math.sqr(Volt)) #No indexing needed since no array
+    
+    phi=pm.Deterministic("phi",a[:,None]+b[:,None]*pm.math.sqr(Volt))
     
     #phi1 vanishes from p expression under simplification
-    p1=pm.Deterministic("p1",-pm.math.sin(theta[0])*pm.math.sin(theta[1])*pm.math.cos(phi)/2 + pm.math.cos(theta[0])*pm.math.cos(theta[1])/2 + 1/2)
-    p2=pm.Deterministic("p2",-pm.math.cos(theta[0] - theta[1])/4 - pm.math.cos(theta[0] + theta[1])/4 - pm.math.cos(-phi + theta[0] + theta[1])/8 + pm.math.cos(phi - theta[0] + theta[1])/8 + pm.math.cos(phi + theta[0] - theta[1])/8 - pm.math.cos(phi + theta[0] + theta[1])/8 + 1/2)
-    
+    p1=pm.Deterministic("p1",-pm.math.sin(theta[0])*pm.math.sin(theta[1])*pm.math.cos(phi[0])/2 + pm.math.cos(theta[0])*pm.math.cos(theta[1])/2 + 1/2)
+    p2=pm.Deterministic("p2",-pm.math.cos(theta[0] - theta[1])/4 - pm.math.cos(theta[0] + theta[1])/4 - pm.math.cos(-phi[0] + theta[0] + theta[1])/8 + pm.math.cos(phi[0] - theta[0] + theta[1])/8 + pm.math.cos(phi[0] + theta[0] - theta[1])/8 - pm.math.cos(phi[0] + theta[0] + theta[1])/8 + 1/2)
+
     P=pm.Deterministic("P",pm.math.stack([p1,p2],axis=-1))
-    #print(P.eval())
-    #print(C_2) #10000 which is wrong, did the wrong summing
-    #print(P[0].eval()) #checks out
-    #print(data_2)
     likelihood=pm.Multinomial("likelihood",n=1000,p=P[0],shape=(N,2),observed=data_2)
 
 with pm.Model() as model_multinomial2:
@@ -189,18 +171,23 @@ with pm.Model() as model_multinomial2:
 
 
 with model_multinomial1:
-    trace_multinomial_2_HMC = pm.sample(draws=int(5e3), chains=2, cores=1,return_inferencedata=True)
+    trace_multinomial_2_HMC = pm.sample(draws=int(5e3), chains=2, cores=1,return_inferencedata=True,nuts={'target_accept':0.85})
     trace_multinomial_2_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=1, return_inferencedata=True)
 
+#,nuts={'target_accept':0.95}
+
 with model_multinomial2:
-    trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=2, cores=2,return_inferencedata=True)
+    trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=2, cores=1,return_inferencedata=True,nuts={'target_accept':0.85})
     trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=1, return_inferencedata=True)
 
 
-#az.plot_trace(data=trace_multinomial_2_HMC,var_names=["eta","a","b"])
+az.plot_trace(data=trace_multinomial_2_HMC,var_names=["eta","a","b"])
 
-#az.plot_trace(data=trace_multinomial_2_Metropolis,var_names=["eta","a","b"])
+az.plot_trace(data=trace_multinomial_2_Metropolis,var_names=["eta","a","b"])
 
+az.plot_trace(data=trace_multinomial_3_HMC,var_names=["eta","a","b"])
+
+az.plot_trace(data=trace_multinomial_3_Metropolis,var_names=["eta","a","b"])
 #Postprocessing (doing relevant transforms and obtaining things)
 #Will need to retransform theta back to reflectivity eta via eta=cos**2(theta/2)
 
@@ -223,15 +210,24 @@ eta_M_3_data=trace_multinomial_3_Metropolis.posterior["eta"].values
 a_M_3_data=trace_multinomial_3_Metropolis.posterior["a"].values
 b_M_3_data=trace_multinomial_3_Metropolis.posterior["b"].values
 
+
 #Am going to take maximum as my point estimate which is pretty common (except in multimode cases), could take the mean if so desired
 
 #HMC
+etaHMC_2_abs=[]
+etaHMC_2_perc=[]
 etaHMC_2_max=[]
 etaHMC_2_mean=[]
 etaHMC_2_std=[]
+
+aHMC_2_abs=[]
+aHMC_2_perc=[]
 aHMC_2_max=[]
 aHMC_2_mean=[]
 aHMC_2_std=[]
+
+bHMC_2_abs=[]
+bHMC_2_perc=[]
 bHMC_2_max=[]
 bHMC_2_mean=[]
 bHMC_2_std=[]
@@ -255,185 +251,317 @@ def FindingMax(array):
     return res
 
 for _ in range(len(eta_2_true)):
-    etaHMC_2_max.append(((FindingMax(eta_HMC_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100) #[0] index is indexing to get first chain
+    etaHMC_2_abs.append(FindingMax(eta_HMC_2_data[0][:,_])-eta_2_true[_])
+    etaHMC_2_perc.append(((FindingMax(eta_HMC_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100) #[0] index is indexing to get first chain
+    etaHMC_2_max.append(FindingMax(eta_HMC_2_data[0][:,_]))
     etaHMC_2_mean.append(eta_HMC_2_data[0][:,_].mean())
     etaHMC_2_std.append(eta_HMC_2_data[0][:,_].std())
     
-for _ in range(len(a_2_true)):   
-    aHMC_2_max.append(((FindingMax(a_HMC_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100) 
+for _ in range(len(a_2_true)):  
+    aHMC_2_abs.append(FindingMax(a_HMC_2_data[0][:,_])-eta_2_true[_]) 
+    aHMC_2_perc.append(((FindingMax(a_HMC_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100) 
+    aHMC_2_max.append(FindingMax(a_HMC_2_data[0][:,0]))
     aHMC_2_mean.append(a_HMC_2_data[0][:,_].mean())
     aHMC_2_std.append(a_HMC_2_data[0][:,_].std())
     
-    bHMC_2_max.append(((FindingMax(b_HMC_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
+    bHMC_2_abs.append(FindingMax(b_HMC_2_data[0][:,_])-b_2_true[_])
+    bHMC_2_perc.append(((FindingMax(b_HMC_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
+    bHMC_2_max.append(FindingMax(b_HMC_2_data[0][:,_]))
     bHMC_2_mean.append(b_HMC_2_data[0][:,_].mean())
     bHMC_2_std.append(b_HMC_2_data[0][:,_].std())
 
 #Metropolis
+etaM_2_abs=[]
+etaM_2_perc=[]
 etaM_2_max=[]
 etaM_2_mean=[]
 etaM_2_std=[]
+
+aM_2_abs=[]
+aM_2_perc=[]
 aM_2_max=[]
 aM_2_mean=[]
 aM_2_std=[]
+
+bM_2_abs=[]
+bM_2_perc=[]
 bM_2_max=[]
 bM_2_mean=[]
 bM_2_std=[]
 
 for _ in range(len(eta_2_true)):
-    etaM_2_max.append(((FindingMax(eta_M_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100)
+    etaM_2_abs.append(FindingMax(eta_M_2_data[0][:,_])-eta_2_true[_])
+    etaM_2_perc.append(((FindingMax(eta_M_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100) #[0] index is indexing to get first chain
+    etaM_2_max.append(FindingMax(eta_M_2_data[0][:,_]))
     etaM_2_mean.append(eta_M_2_data[0][:,_].mean())
     etaM_2_std.append(eta_M_2_data[0][:,_].std())
     
-for _ in range(len(a_2_true)):   
-    aM_2_max.append(((FindingMax(a_M_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100)
+for _ in range(len(a_2_true)):  
+    aM_2_abs.append(FindingMax(a_M_2_data[0][:,_])-eta_2_true[_]) 
+    aM_2_perc.append(((FindingMax(a_M_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100) 
+    aM_2_max.append(FindingMax(a_M_2_data[0][:,0]))
     aM_2_mean.append(a_M_2_data[0][:,_].mean())
     aM_2_std.append(a_M_2_data[0][:,_].std())
     
-    bM_2_max.append(((FindingMax(b_M_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
+    bM_2_abs.append(FindingMax(b_M_2_data[0][:,_])-b_2_true[_])
+    bM_2_perc.append(((FindingMax(b_M_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
+    bM_2_max.append(FindingMax(b_M_2_data[0][:,_]))
     bM_2_mean.append(b_M_2_data[0][:,_].mean())
     bM_2_std.append(b_M_2_data[0][:,_].std())
 
 print("M=2")
 print()
+print()
+print("HMC")
+print()
+print()
 print("True values for eta:")
 print(eta_2_true)
-print("Percentage errors in eta under HMC")
+print("Absolute errors in eta:")
+print(etaHMC_2_abs)
+print("Percentage errors in eta:")
+print(etaHMC_2_perc)
+print("Max for eta:")
 print(etaHMC_2_max)
-print("Means for eta under HMC is: {}".format(etaHMC_2_mean))
-print("Standard deviations for eta under HMC is: {}".format(etaHMC_2_std))
+print("Means for eta:")
+print(etaHMC_2_mean)
+print("Standard deviations for eta:")
+print(etaHMC_2_std)
 print()
 print("True values for a:")
 print(a_2_true)
-print("Percentage errors in a under HMC")
+print("Absolute errors in a:")
+print(aHMC_2_abs)
+print("Percentage errors in a:")
+print(aHMC_2_perc)
+print("Max for a:")
 print(aHMC_2_max)
-print("Means for a under HMC is: {}".format(aHMC_2_mean))
-print("Standard deviations for a under HMC is: {}".format(aHMC_2_std))
+print("Means for a:")
+print(aHMC_2_mean)
+print("Standard deviations for a:")
+print(aHMC_2_std)
 print()
 print("True values for b:")
 print(b_2_true)
-print("Percentage errors in b under HMC")
+print("Absolute errors in b:")
+print(bHMC_2_abs)
+print("Percentage errors in b:")
+print(bHMC_2_perc)
+print("Max for b:")
 print(bHMC_2_max)
-print("Means for b under HMC is: {}".format(bHMC_2_mean))
-print("Standard deviations for b under HMC is: {}".format(bHMC_2_std))
+print("Means for b:")
+print(bHMC_2_mean)
+print("Standard deviations for b:")
+print(bHMC_2_std)
 
 print()
+print()
+print("Metropolis")
 print()
 print("True values for eta:")
 print(eta_2_true)
-print("Percentage errors in eta under Metropolis")
+print("Absolute errors in eta:")
+print(etaM_2_abs)
+print("Percentage errors in eta:")
+print(etaM_2_perc)
+print("Max for eta:")
 print(etaM_2_max)
-print("Means for eta under Metropolis is: {}".format(etaM_2_mean))
-print("Standard deviations for eta under Metropolis is: {}".format(etaM_2_std))
+print("Means for eta:")
+print(etaM_2_mean)
+print("Standard deviations for eta:")
+print(etaM_2_std)
 print()
 print("True values for a:")
 print(a_2_true)
-print("Percentage errors in a under Metropolis")
+print("Absolute errors in a:")
+print(aM_2_abs)
+print("Percentage errors in a:")
+print(aM_2_perc)
+print("Max for a:")
 print(aM_2_max)
-print("Means for a under Metropolis is: {}".format(aM_2_mean))
-print("Standard deviations for a under Metropolis is: {}".format(aM_2_std))
+print("Means for a:")
+print(aM_2_mean)
+print("Standard deviations for a:")
+print(aM_2_std)
 print()
 print("True values for b:")
 print(b_2_true)
-print("Percentage errors in b under Metropolis")
+print("Absolute errors in b:")
+print(bM_2_abs)
+print("Percentage errors in b:")
+print(bM_2_perc)
+print("Max for b:")
 print(bM_2_max)
-print("Means for b under Metropolis is: {}".format(bM_2_mean))
-print("Standard deviations for b under Metropolis is: {}".format(bM_2_std))
-
+print("Means for b:")
+print(bM_2_mean)
+print("Standard deviations for b:")
+print(bM_2_std)
+print()
+print()
 
 
 #HMC
+etaHMC_3_abs=[]
+etaHMC_3_perc=[]
 etaHMC_3_max=[]
 etaHMC_3_mean=[]
 etaHMC_3_std=[]
+
+aHMC_3_abs=[]
+aHMC_3_perc=[]
 aHMC_3_max=[]
 aHMC_3_mean=[]
 aHMC_3_std=[]
+
+bHMC_3_abs=[]
+bHMC_3_perc=[]
 bHMC_3_max=[]
 bHMC_3_mean=[]
 bHMC_3_std=[]
 
 for _ in range(len(eta_3_true)):
-    etaHMC_3_max.append(((FindingMax(eta_HMC_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100)
+    etaHMC_3_abs.append(FindingMax(eta_HMC_3_data[0][:,_])-eta_3_true[_])
+    etaHMC_3_perc.append(((FindingMax(eta_HMC_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100) #[0] index is indexing to get first chain
+    etaHMC_3_max.append(FindingMax(eta_HMC_3_data[0][:,_]))
     etaHMC_3_mean.append(eta_HMC_3_data[0][:,_].mean())
     etaHMC_3_std.append(eta_HMC_3_data[0][:,_].std())
     
-for _ in range(len(a_3_true)):   
-    aHMC_3_max.append(((np.max(a_HMC_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100)
+for _ in range(len(a_3_true)):  
+    aHMC_3_abs.append(FindingMax(a_HMC_3_data[0][:,_])-eta_3_true[_]) 
+    aHMC_3_perc.append(((FindingMax(a_HMC_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100) 
+    aHMC_3_max.append(FindingMax(a_HMC_3_data[0][:,0]))
     aHMC_3_mean.append(a_HMC_3_data[0][:,_].mean())
     aHMC_3_std.append(a_HMC_3_data[0][:,_].std())
     
-    bHMC_3_max.append(((np.max(b_HMC_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
+    bHMC_3_abs.append(FindingMax(b_HMC_3_data[0][:,_])-b_3_true[_])
+    bHMC_3_perc.append(((FindingMax(b_HMC_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
+    bHMC_3_max.append(FindingMax(b_HMC_3_data[0][:,_]))
     bHMC_3_mean.append(b_HMC_3_data[0][:,_].mean())
     bHMC_3_std.append(b_HMC_3_data[0][:,_].std())
 
 #Metropolis
+etaM_3_abs=[]
+etaM_3_perc=[]
 etaM_3_max=[]
 etaM_3_mean=[]
 etaM_3_std=[]
+
+aM_3_abs=[]
+aM_3_perc=[]
 aM_3_max=[]
 aM_3_mean=[]
 aM_3_std=[]
+
+bM_3_abs=[]
+bM_3_perc=[]
 bM_3_max=[]
 bM_3_mean=[]
 bM_3_std=[]
 
 for _ in range(len(eta_3_true)):
-    etaM_3_max.append(((np.max(eta_M_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100)
-    etaM_3_mean.append(eta_M_3_data[0][:,_].mean())
+    etaM_3_abs.append(FindingMax(eta_M_3_data[0][:,_])-eta_3_true[_])
+    etaM_3_perc.append(((FindingMax(eta_M_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100) #[0] index is indexing to get first chain
+    etaM_3_max.append(FindingMax(eta_M_3_data[0][:,_]))
+    etaM_2_mean.append(eta_M_3_data[0][:,_].mean())
     etaM_3_std.append(eta_M_3_data[0][:,_].std())
     
-for _ in range(len(a_3_true)):   
-    aM_3_max.append(((np.max(a_M_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100)
+for _ in range(len(a_3_true)):  
+    aM_3_abs.append(FindingMax(a_M_3_data[0][:,_])-eta_3_true[_]) 
+    aM_3_perc.append(((FindingMax(a_M_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100) 
+    aM_3_max.append(FindingMax(a_M_3_data[0][:,0]))
     aM_3_mean.append(a_M_3_data[0][:,_].mean())
     aM_3_std.append(a_M_3_data[0][:,_].std())
     
-    bM_3_max.append(((np.max(b_M_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
+    bM_3_abs.append(FindingMax(b_M_3_data[0][:,_])-b_3_true[_])
+    bM_3_perc.append(((FindingMax(b_M_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
+    bM_3_max.append(FindingMax(b_HMC_3_data[0][:,_]))
     bM_3_mean.append(b_M_3_data[0][:,_].mean())
     bM_3_std.append(b_M_3_data[0][:,_].std())
 
 print("M=3")
 print()
+print()
+print("HMC")
+print()
+print()
 print("True values for eta:")
 print(eta_3_true)
-print("Percentage errors in eta under HMC")
+print("Absolute errors in eta:")
+print(etaHMC_3_abs)
+print("Percentage errors in eta:")
+print(etaHMC_3_perc)
+print("Max for eta:")
 print(etaHMC_3_max)
-print("Means for eta under HMC is: {}".format(etaHMC_3_mean))
-print("Standard deviations for eta under HMC is: {}".format(etaHMC_3_std))
+print("Means for eta:")
+print(etaHMC_3_mean)
+print("Standard deviations for eta:")
+print(etaHMC_3_std)
 print()
 print("True values for a:")
 print(a_3_true)
-print("Percentage errors in a under HMC")
+print("Absolute errors in a:")
+print(aHMC_3_abs)
+print("Percentage errors in a:")
+print(aHMC_3_perc)
+print("Max for a:")
 print(aHMC_3_max)
-print("Means for eta under HMC is: {}".format(aHMC_3_mean))
-print("Standard deviations for eta under HMC is: {}".format(aHMC_3_std))
+print("Means for a:")
+print(aHMC_3_mean)
+print("Standard deviations for a:")
+print(aHMC_3_std)
 print()
 print("True values for b:")
 print(b_3_true)
-print("Percentage errors in b under HMC")
+print("Absolute errors in b:")
+print(bHMC_3_abs)
+print("Percentage errors in b:")
+print(bHMC_3_perc)
+print("Max for b:")
 print(bHMC_3_max)
-print("Means for eta under HMC is: {}".format(bHMC_3_mean))
-print("Standard deviations for eta under HMC is: {}".format(bHMC_3_std))
+print("Means for b:")
+print(bHMC_3_mean)
+print("Standard deviations for b:")
+print(bHMC_3_std)
 
 print()
 print()
-
+print("Metropolis")
+print()
 print("True values for eta:")
 print(eta_3_true)
-print("Percentage errors in eta under Metropolis")
+print("Absolute errors in eta:")
+print(etaM_3_abs)
+print("Percentage errors in eta:")
+print(etaM_3_perc)
+print("Max for eta:")
 print(etaM_3_max)
-print("Means for eta under Metropolis is: {}".format(etaM_3_mean))
-print("Standard deviations for eta under Metropolis is: {}".format(etaM_3_std))
+print("Means for eta:")
+print(etaM_3_mean)
+print("Standard deviations for eta:")
+print(etaM_3_std)
 print()
 print("True values for a:")
 print(a_3_true)
-print("Percentage errors in a under Metropolis")
+print("Absolute errors in a:")
+print(aM_3_abs)
+print("Percentage errors in a:")
+print(aM_3_perc)
+print("Max for a:")
 print(aM_3_max)
-print("Means for a under Metropolis is: {}".format(aM_3_mean))
-print("Standard deviations for a under Metropolis is: {}".format(aM_3_std))
+print("Means for a:")
+print(aM_3_mean)
+print("Standard deviations for a:")
+print(aM_3_std)
 print()
 print("True values for b:")
 print(b_3_true)
-print("Percentage errors in b under Metropolis")
+print("Absolute errors in b:")
+print(bM_3_abs)
+print("Percentage errors in b:")
+print(bM_3_perc)
+print("Max for b:")
 print(bM_3_max)
-print("Means for b under Metropolis is: {}".format(bM_3_mean))
-print("Standard deviations for b under Metropolis is: {}".format(bM_3_std))
+print("Means for b:")
+print(bM_3_mean)
+print("Standard deviations for b:")
+print(bM_3_std)
