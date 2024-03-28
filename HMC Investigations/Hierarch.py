@@ -1,18 +1,16 @@
 """
-This code file will be to finally try and incorporate a scaled up version of HMC, there are still some issues
-since my workflow is very inefficient and so perhaps later refinements can be done but at this stage i just want 
-some data as a kind of proof-of-concept and a limited gauge of average error as you try to estimate more parameters, 
-as well as gauging runtime (not counting the time taken to incorporate the model into the code).
+This code file will be to explore reparameterisation of the problem. Will first see if sampling theta in the pm.sample line works better but i think proper reparameterisation would probably be to set hyperparameters to help explore the posterior distribution
 
 Active notes:
-Starting with N=2, for this there is only theta_0,theta_1,phi_0. For N=3:theta_0-5,phi_0-4
-No arccos in pymc math function, Have made a post on the forum. Solution found at https://discourse.pymc.io/t/no-inverse-trig-in-pm-math-functions/13681/3
-Have plugged in expressions, busywork done via search and replace, lots of lines of code means file is running slow so maybe it would be worth changing as a python expression but probably won't be necessary since this is only a proof of principle test and i need a much better workflow for this in general.
-Got code working, still needs some polish.
-For postprocessing data at the end, I am currently setting it to just work the data for one of the chains first per variable per sampling method. Later on I can combine them or just do the postprocessing for all of them
-Code seems to suffer a lot on M=2 with one of the eta estimates coming out to be 0.1, could be that the probability part for one of the phi's cancels out. Same with M=3 now i have noticed, it is deffo the term at the end that gets cancelled because it is just a phase shift that isn't physically observable so its fine. But then why M=2 still suffers is curious, i have bumped up the number of voltage experiments to see if it solves the issue. 
-Also taking percentage errors and standard deviations seem to show that HMC isn't really providing much of an advantage, especially considering HMC is taking longer to do its samples, could be to do with the fact that the starting guess is basically where the true value is, so convergence is more of a null factor? But pushing your starting guess further away then leads to convergence on the wrong peak since the distribution is multimodal?
-As expected one of the inferences doesn't update which is the phase shifter(s) at the end of the waveguide since it cancels out of the probability term since it has no physically observable effect and thus stays as the prior.
+Loosened standard deviation on b from 0.07 to 0.7, too strict priors can penalise inference, was causing energy plot to be way off.
+Thought it would run quicker with this change but inference is still running incredibly slow so I will have to proceed with reparameterisation. Done by separating out parameters, so instead of eta=pm.Normal("eta",mu,sigma), you do eta_sep=pm.Normal("eta_sep",0,1) then eta=pm.Deterministic("eta",mu+eta_sep*sigma).
+Tried dropping the nuts target_accept to see about speeding up the sim, hit a lot of divergences so not a good call, will leave them in though to identify where the divergences are occurring. Had a run with other 2000 divergences out of 12000, they seem to be all over the place and naturally compromises the entire run, will maybe go back to slowly lowering the target_accept until I can get just a few but maintain the overall integrity of the run. Would also like to test getting sample_stats (idata.sample_stats() should hopefully work). Target_accept of 0.8 and 0.85 seems to be threshold for no divergences.
+Would also like to start modelling errors better to help tackle model misspecification, will either use normal or exponential centred on eta,a,b? But still not sure how to handle errors in Voltage measurement since they are data, will have to think around it. Also as part of this I would have to change Multinomial 'n' specification to C rather than 1000.
+Tough to tackle divergences since diagnostics don't indicate where they originate so I can't pinpoint where the divergences are aggregating and thus where it is struggling to sample from. Either way it is my intuition that there is a funnel type situation happening, since upping target_accept lowers step size but in doing so means the sampler keeps hitting the max tree depth and even then there are still divergences. So I should continue reparameterising until I find something that works, I think better reflecting voltage errors may work well?
+
+Making voltage errors reflected in the model makes things also tough.
+
+Warning about some parameters having an ESS less than 100 is for the phase shifter that gets omitted from the probability expression.
 """
 
 import arviz as az
@@ -116,26 +114,24 @@ def main():
 
     data_2,C_2,P_2,data_3,C_3,P_3=DataGen(InputNumber=1000,Voltages1=V_2_dist,Voltages2 = V_3_dist, poissonian=False)
 
-    #print(data_2)
-    #print(C_2)
-    #print(P_2)
-    #print(data_3)
-    #print(C_3)
-    #print(P_3)
 
     L_dev=4E-9 #delta L, chosen so it coincides with Alex's sd to be ~np.pi/200
     wv=1550E-9
     a_dev=(2*np.pi*L_dev)/wv
-
+    
+    """
     with pm.Model() as model_multinomial1:
         #M=2
 
         # Define priors
+        #sd=0.05
         eta=pm.TruncatedNormal("eta",mu=0.5,sigma=0.05,lower=0.0,upper=1.0,initval=[0.5,0.5],shape=2) #array of 
         theta=pm.Deterministic("theta",2*pt.arccos(pt.sqrt(eta)))
         #priors for conciseness
+        #sd=a_dev
         a=pm.TruncatedNormal("a", mu=0, sigma=a_dev,lower=-np.pi,upper=np.pi,initval=[0,0],shape=2)  #array of priors for conciseness
-        b=pm.Normal("b", mu=b_2_est, sigma=0.07,initval=[0.7,0.7],shape=2) #array of priors for conciseness
+        #sd=0.07
+        b=pm.Normal("b", mu=b_2_est, sigma=0.7,initval=[0.7,0.7],shape=2) #array of priors for conciseness
         
         Volt=pm.Deterministic("Volt",pt.as_tensor(V_2_dist))
         
@@ -147,20 +143,59 @@ def main():
 
         P=pm.Deterministic("P",pm.math.stack([p1,p2],axis=-1))
         likelihood=pm.Multinomial("likelihood",n=1000,p=P[0],shape=(N,2),observed=data_2)
+    """
 
+    with pm.Model() as model_multinomial1:
+        #M=2
+
+        # Define priors
+        #sd=0.05
+        eta_sep=pm.TruncatedNormal("eta_sep",mu=0,sigma=1,lower=0.0,upper=1.0,shape=2) #array of
+        eta=pm.Deterministic("eta",[0.5,0.5]+eta_sep*0.05)
+        theta=pm.Deterministic("theta",2*pt.arccos(pt.sqrt(eta)))
+        #priors for conciseness
+
+        #sd=a_dev
+        a_sep=pm.TruncatedNormal("a_sep", mu=0, sigma=1,lower=-np.pi,upper=np.pi, shape=2)  #array of priors for conciseness
+        a=pm.Deterministic("a",[0,0]+a_sep*a_dev)
+
+        sd=0.7
+        b_sep=pm.Normal("b_sep", mu=0, sigma=1,shape=2) #array of priors for conciseness
+        b=pm.Deterministic("b",[0.7,0.7]+b_sep*sd)
+
+        #Have decided to open the Volt variable to allow additional freedom
+        Volt=pm.Normal("Volt",mu=V_2_dist,sigma=0.1)
+        #Volt=pm.Deterministic("Volt",pt.as_tensor(V_2_dist))
+        
+        phi=pm.Deterministic("phi",a[:,None]+b[:,None]*pm.math.sqr(Volt))
+        
+        #phi1 vanishes from p expression under simplification
+        p1=pm.Deterministic("p1",-pm.math.sin(theta[0])*pm.math.sin(theta[1])*pm.math.cos(phi[0])/2 + pm.math.cos(theta[0])*pm.math.cos(theta[1])/2 + 1/2)
+        p2=pm.Deterministic("p2",-pm.math.cos(theta[0] - theta[1])/4 - pm.math.cos(theta[0] + theta[1])/4 - pm.math.cos(-phi[0] + theta[0] + theta[1])/8 + pm.math.cos(phi[0] - theta[0] + theta[1])/8 + pm.math.cos(phi[0] + theta[0] - theta[1])/8 - pm.math.cos(phi[0] + theta[0] + theta[1])/8 + 1/2)
+
+        P=pm.Deterministic("P",pm.math.stack([p1,p2],axis=-1))
+        likelihood=pm.Multinomial("likelihood",n=1000,p=P[0],shape=(N,2),observed=data_2)
+    
     with pm.Model() as model_multinomial2:
         #M=3
 
         # Define priors
-        eta=pm.TruncatedNormal("eta",mu=0.5,sigma=0.05,lower=0.0,upper=1.0,initval=eta_3_est,shape=6) #array of 
-        theta=2*pt.arccos(pt.sqrt(eta))
+        eta_sep=pm.TruncatedNormal("eta_sep",mu=0,sigma=1,lower=0.0,upper=1.0,shape=6) #array of
+        eta=pm.Deterministic("eta",[0.5,0.5,0.5,0.5,0.5,0.5]+eta_sep*0.05)
+        theta=pm.Deterministic("theta",2*pt.arccos(pt.sqrt(eta)))
         #priors for conciseness
-        a=pm.TruncatedNormal("a", mu=0, sigma=a_dev,lower=-np.pi,upper=np.pi,initval=a_3_est,shape=6)  #array of priors for conciseness
-        b=pm.Normal("b", mu=b_3_est, sigma=0.07,initval=b_3_est,shape=6) #array of priors for conciseness
+
+        #sd=a_dev
+        a_sep=pm.TruncatedNormal("a_sep", mu=0, sigma=1,lower=-np.pi,upper=np.pi, shape=6)  #array of priors for conciseness
+        a=pm.Deterministic("a",[0,0,0,0,0,0]+a_sep*a_dev)
+
+        sd=0.7
+        #b can seem to become quite sharp or different distributions having different widths? Plus lack of agreement between chains
+        b_sep=pm.Normal("b_sep", mu=0, sigma=1,shape=6) #array of priors for conciseness
+        b=pm.Deterministic("b",[0.5,0.5,0.5,0.5,0.5,0.5]+b_sep*sd)
         
-        Volt=pm.Deterministic("Volt",pt.as_tensor(V_3_dist))
-        #phi=pm.Deterministic("phi",(a+pt.tensordot(b,pm.math.sqr(Volt),axes=1))) #still need to find math function so a[1],b[1] and row 1 of Volt is used...etc
-        #phi=pm.Deterministic("phi",pt.batched_tensordot(b,pm.math.sqr(Volt),axes=1))
+        #Volt=pm.Deterministic("Volt",pt.as_tensor(V_3_dist))
+        Volt=pm.Normal("Volt",mu=V_3_dist,sigma=0.1) #This really brutalises the output
         phi=pm.Deterministic("phi",a[:,None]+b[:,None]*pm.math.sqr(Volt))
 
         p1=pm.Deterministic("p1",-4*pm.math.sin(phi[0])*pm.math.sin(phi[1])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[2])*pm.math.cos(phi[3])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(phi[0])*pm.math.sin(phi[1])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[2])*pm.math.cos(phi[3])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2) + 2*pm.math.sin(phi[0])*pm.math.sin(phi[1])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[2] + phi[3]) + 4*pm.math.sin(phi[0])*pm.math.sin(phi[2])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[3]) + 4*pm.math.sin(phi[0])*pm.math.sin(phi[2])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[3]) + 4*pm.math.sin(phi[1])*pm.math.sin(phi[2])*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[3] - phi[4]) + 4*pm.math.sin(phi[1])*pm.math.sin(phi[2])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[3] - phi[4]) - 4*pm.math.sin(phi[1])*pm.math.sin(phi[4])*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[2])*pm.math.cos(phi[3])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(phi[1])*pm.math.sin(phi[4])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[2])*pm.math.cos(phi[3])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) + 2*pm.math.sin(phi[1])*pm.math.sin(phi[4])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(-phi[0] + phi[2] + phi[3]) + 2*pm.math.sin(phi[1])*pm.math.sin(phi[4])*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[2] + phi[3]) - 4*pm.math.sin(phi[2])*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[1])*pm.math.cos(phi[4])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(phi[2])*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[1])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(phi[2])*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[1])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(phi[2])*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(phi[1])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2) - 2*pm.math.sin(phi[2])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(phi[0] - phi[3])*pm.math.cos(phi[1])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2) - 2*pm.math.sin(phi[2])*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.sin(phi[1] - phi[3])*pm.math.cos(phi[4])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) + 4*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.sin(phi[1] + phi[4])*pm.math.cos(phi[2])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) + 4*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[5]/2)*pm.math.sin(phi[1] + phi[4])*pm.math.cos(phi[0])*pm.math.cos(phi[2])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) + 4*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.sin(phi[0] + phi[1])*pm.math.cos(phi[2])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) + 4*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.sin(phi[0] + phi[1])*pm.math.cos(phi[2])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2) - 2*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(phi[0] + phi[1])*pm.math.cos(phi[2])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2) - 2*pm.math.sin(phi[3])*pm.math.sin(theta[0]/2)*pm.math.sin(theta[5]/2)*pm.math.sin(phi[0] + phi[1] - phi[2])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) - 2*pm.math.sin(phi[3])*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.sin(phi[1] + phi[4])*pm.math.cos(phi[2])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) + 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2 - 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2 - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2 + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[5]/2)**2 - 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) + 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[2])*pm.math.cos(phi[4])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2 + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2 + 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)**2 - 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)**2 + 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[3]) + 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[3]) - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[3]) - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[3] + phi[4]) - 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) - 8*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[1])*pm.math.cos(phi[3])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[2] - phi[4]) - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2 + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 - pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2 - 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[5]/2)**2 + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) - 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[2])*pm.math.cos(phi[4])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 - pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2 - 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2 - 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[4]/2)**2 + 4*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 2*pm.math.sin(theta[0]/2)**2*pm.math.sin(theta[5]/2)**2 - pm.math.sin(theta[0]/2)**2 + 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[3]) + 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[3]) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[3]) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[3] + phi[4]) - 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) - 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[1])*pm.math.cos(phi[3])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[2] - phi[4]) - 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) + 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) - 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) + 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(phi[2])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[0])*pm.math.cos(phi[2])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) - 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[2])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(phi[2])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) - 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) - 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) + 8*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) - 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[1]/2)*pm.math.cos(phi[0])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[1]/2) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[0] + phi[1] - phi[3]) - 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(theta[0]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[0] + phi[1] - phi[3]) + 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(theta[0]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[0] + phi[1] - phi[3]) + 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(theta[0]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[0] + phi[1] - phi[3] + phi[4]) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[3])*pm.math.cos(phi[4])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[2]) + 4*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[0])*pm.math.cos(phi[3])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[2]) - 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(phi[0])*pm.math.cos(phi[3])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[2]) + 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[5]/2)*pm.math.sin(phi[0] - phi[2])*pm.math.sin(phi[1] + phi[4])*pm.math.cos(phi[3])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2) - 2*pm.math.sin(theta[0]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[1])*pm.math.cos(theta[0]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[0] - phi[2])*pm.math.cos(phi[3] - phi[4]) - 4*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2 + 4*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 - pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)**2 - 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)**2*pm.math.sin(theta[5]/2)**2 + 4*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) - 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) - 4*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[2])*pm.math.cos(phi[4])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(phi[2])*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2) + 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 - pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)**2 - 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[3]/2)**2*pm.math.sin(theta[5]/2)**2 - 4*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 + 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)**2 + 4*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) + 2*pm.math.sin(theta[1]/2)**2*pm.math.sin(theta[5]/2)**2 - pm.math.sin(theta[1]/2)**2 - 4*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[3]) - 4*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[3]) + 2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(phi[1] - phi[3]) + 2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[2]/2)*pm.math.sin(theta[3]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[1] - phi[3] + phi[4]) + 4*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) + 4*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)**2*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) - 2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[4]/2)*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[4]/2)*pm.math.cos(-phi[1] + phi[2] + phi[3]) - 2*pm.math.sin(theta[1]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[1])*pm.math.cos(phi[3])*pm.math.cos(theta[1]/2)*pm.math.cos(theta[2]/2)*pm.math.cos(theta[3]/2)*pm.math.cos(theta[5]/2)*pm.math.cos(phi[2] - phi[4]) + 2*pm.math.sin(theta[4]/2)**2*pm.math.sin(theta[5]/2)**2 - pm.math.sin(theta[4]/2)**2 - 2*pm.math.sin(theta[4]/2)*pm.math.sin(theta[5]/2)*pm.math.cos(phi[4])*pm.math.cos(theta[4]/2)*pm.math.cos(theta[5]/2) - pm.math.sin(theta[5]/2)**2 + 1)
@@ -168,412 +203,51 @@ def main():
         p3=pm.Deterministic("p3",(-2*pm.math.cos(theta[0] - theta[1]) - 2*pm.math.cos(theta[0] + theta[1]) - pm.math.cos(-phi[0] + theta[0] + theta[1]) + pm.math.cos(phi[0] - theta[0] + theta[1]) + pm.math.cos(phi[0] + theta[0] - theta[1]) - pm.math.cos(phi[0] + theta[0] + theta[1]) + 4)*(-2*pm.math.cos(theta[2] - theta[3]) - 2*pm.math.cos(theta[2] + theta[3]) - pm.math.cos(-phi[2] + theta[2] + theta[3]) + pm.math.cos(phi[2] - theta[2] + theta[3]) + pm.math.cos(phi[2] + theta[2] - theta[3]) - pm.math.cos(phi[2] + theta[2] + theta[3]) + 4)/64)
         
         P=pm.Deterministic("P",pm.math.stack([p1,p2,p3],axis=-1))
-        #P.eval()
-        #pm.draw(P)
         
         likelihood=pm.Multinomial("likelihood",n=1000,p=P[0],shape=(N,3),observed=data_3)
+    
 
-
+    #print(model_multinomial1.free_RVs)
+    
     with model_multinomial1:
-        #trace_multinomial_2_HMC = pm.sample(draws=int(5e3), chains=2, cores=1,return_inferencedata=True,nuts={'target_accept':0.85})
-        trace_multinomial_2_HMC = pm.sample(draws=int(5e3), chains=2, cores=cpucount,return_inferencedata=True,nuts={'target_accept':0.85})
-        #cpucount
-        #trace_multinomial_2_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=1, return_inferencedata=True)
-        trace_multinomial_2_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=cpucount, return_inferencedata=True)
+        #Need to index model variables like a dictionary due to shared RV names between models, easier to index than rewrite
+        stepmethod=[pm.NUTS([model_multinomial1['a_sep']]),pm.NUTS([model_multinomial1['a_sep'],model_multinomial1['b_sep']]),pm.NUTS([model_multinomial1['a_sep'],model_multinomial1['b_sep'],model_multinomial1['eta_sep']])]
 
-    #,nuts={'target_accept':0.95}
+        trace_multinomial_2_HMC = pm.sample(draws=int(1e3), chains=4, cores=cpucount,step=stepmethod, return_inferencedata=True)
+        #trace_multinomial_2_Metropolis = pm.sample(draws=int(1e3), step=pm.Metropolis(),chains=4, cores=cpucount, return_inferencedata=True)
 
+    #{'target_accept':0.85}
+    
     with model_multinomial2:
-        #trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=2, cores=1,return_inferencedata=True,nuts={'target_accept':0.85})
-        trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=4, cores=cpucount,return_inferencedata=True,nuts={'target_accept':0.85})
-        #trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=1, return_inferencedata=True)
-        trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=4, cores=cpucount, return_inferencedata=True)
 
+        stepmethod=[pm.NUTS([model_multinomial2['a_sep']]),pm.NUTS([model_multinomial2['a_sep'],model_multinomial2['b_sep']]),pm.NUTS([model_multinomial2['a_sep'],model_multinomial2['b_sep'],model_multinomial2['eta_sep']])]
 
-    az.plot_trace(data=trace_multinomial_2_HMC,var_names=["eta","a","b"],divergences=None)
+        trace_multinomial_3_HMC = pm.sample(draws=int(1e3), chains=4, cores=cpucount,step=stepmethod,return_inferencedata=True)
+        #trace_multinomial_3_Metropolis = pm.sample(draws=int(1e3), step=pm.Metropolis(),chains=4, cores=cpucount, return_inferencedata=True)
+    
 
-    az.plot_trace(data=trace_multinomial_2_Metropolis,var_names=["eta","a","b"],divergences=None)
+    az.plot_trace(data=trace_multinomial_2_HMC,var_names=["eta","a","b"],divergences=True)
+    az.plot_energy(data=trace_multinomial_2_HMC)
+    az.plot_pair(trace_multinomial_2_HMC, var_names=["eta","a","b"], divergences=True)
+    print(az.summary(data=trace_multinomial_2_HMC,var_names=["eta","a","b"]))
+    
+    #az.plot_trace(data=trace_multinomial_2_Metropolis,var_names=["eta","a","b"],divergences=None)
+    #az.plot_pair(trace_multinomial_2_Metropolis, var_names=["eta","a","b"], divergences=True)
+    #print(az.summary(data=trace_multinomial_2_Metropolis,var_names=["eta","a","b"]))
 
+    
     az.plot_trace(data=trace_multinomial_3_HMC,var_names=["eta","a","b"],divergences=None)
-
-    az.plot_trace(data=trace_multinomial_3_Metropolis,var_names=["eta","a","b"],divergences=None)
-    #Postprocessing (doing relevant transforms and obtaining things)
-    #Will need to retransform theta back to reflectivity eta via eta=cos**2(theta/2)
-
-    eta_HMC_2_data=trace_multinomial_2_HMC.posterior["eta"].values
-    a_HMC_2_data=trace_multinomial_2_HMC.posterior["a"].values
-    b_HMC_2_data=trace_multinomial_2_HMC.posterior["b"].values
-
-    eta_M_2_data=trace_multinomial_2_Metropolis.posterior["eta"].values
-    a_M_2_data=trace_multinomial_2_Metropolis.posterior["a"].values
-    b_M_2_data=trace_multinomial_2_Metropolis.posterior["b"].values
-
-
-
-
-    eta_HMC_3_data=trace_multinomial_3_HMC.posterior["eta"].values
-    a_HMC_3_data=trace_multinomial_3_HMC.posterior["a"].values
-    b_HMC_3_data=trace_multinomial_3_HMC.posterior["b"].values
-
-    eta_M_3_data=trace_multinomial_3_Metropolis.posterior["eta"].values
-    a_M_3_data=trace_multinomial_3_Metropolis.posterior["a"].values
-    b_M_3_data=trace_multinomial_3_Metropolis.posterior["b"].values
-
-
-    #Am going to take maximum as my point estimate which is pretty common (except in multimode cases), could take the mean if so desired
-
-    #HMC
-    etaHMC_2_abs=[]
-    etaHMC_2_perc=[]
-    etaHMC_2_max=[]
-    etaHMC_2_mean=[]
-    etaHMC_2_std=[]
-
-    aHMC_2_abs=[]
-    aHMC_2_perc=[]
-    aHMC_2_max=[]
-    aHMC_2_mean=[]
-    aHMC_2_std=[]
-
-    bHMC_2_abs=[]
-    bHMC_2_perc=[]
-    bHMC_2_max=[]
-    bHMC_2_mean=[]
-    bHMC_2_std=[]
-
-    def FindingMax(array): 
-        """
-        #In practice when using this function, multiple chain will lit to an array of matrices so you will need to index the specific chain you want the max for
-
-        Note that individual chains have serial dependence; values from separate chains don't, so if you wanted it to look like one long chain, just concatenating them wouldn't look right.
-
-        However, if you're just interested in the distribution, the order in the chain is irrelevant. You don't actually seek to concatenate the chains for that, you simply want to pool all the distributional information (treat them as one big sample). Certainly, if the chains are all converged to their stationary distribution, they'll all be samples from the same distribution -- you can combine those.
-
-        Indeed some people run a burn-in period and just draw a single value from many separate chains.
-
-        (Keeping the runs separate might help to judge if they actually have converged.)
-        """
-        kernel_a = scipy.stats.gaussian_kde(array)
-        a_range = np.linspace(min(array), max(array), 1000)
-        estimated_pdf_a = kernel_a.evaluate(a_range)  
-        res=a_range[np.argmax(estimated_pdf_a)]
-        return res
-
-    for _ in range(len(eta_2_true)):
-        etaHMC_2_abs.append(FindingMax(eta_HMC_2_data[0][:,_])-eta_2_true[_])
-        etaHMC_2_perc.append(((FindingMax(eta_HMC_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100) #[0] index is indexing to get first chain
-        etaHMC_2_max.append(FindingMax(eta_HMC_2_data[0][:,_]))
-        etaHMC_2_mean.append(eta_HMC_2_data[0][:,_].mean())
-        etaHMC_2_std.append(eta_HMC_2_data[0][:,_].std())
-        
-    for _ in range(len(a_2_true)):  
-        aHMC_2_abs.append(FindingMax(a_HMC_2_data[0][:,_])-a_2_true[_]) 
-        aHMC_2_perc.append(((FindingMax(a_HMC_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100) 
-        aHMC_2_max.append(FindingMax(a_HMC_2_data[0][:,0]))
-        aHMC_2_mean.append(a_HMC_2_data[0][:,_].mean())
-        aHMC_2_std.append(a_HMC_2_data[0][:,_].std())
-        
-        bHMC_2_abs.append(FindingMax(b_HMC_2_data[0][:,_])-b_2_true[_])
-        bHMC_2_perc.append(((FindingMax(b_HMC_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
-        bHMC_2_max.append(FindingMax(b_HMC_2_data[0][:,_]))
-        bHMC_2_mean.append(b_HMC_2_data[0][:,_].mean())
-        bHMC_2_std.append(b_HMC_2_data[0][:,_].std())
-
-    #Metropolis
-    etaM_2_abs=[]
-    etaM_2_perc=[]
-    etaM_2_max=[]
-    etaM_2_mean=[]
-    etaM_2_std=[]
-
-    aM_2_abs=[]
-    aM_2_perc=[]
-    aM_2_max=[]
-    aM_2_mean=[]
-    aM_2_std=[]
-
-    bM_2_abs=[]
-    bM_2_perc=[]
-    bM_2_max=[]
-    bM_2_mean=[]
-    bM_2_std=[]
-
-    for _ in range(len(eta_2_true)):
-        etaM_2_abs.append(FindingMax(eta_M_2_data[0][:,_])-eta_2_true[_])
-        etaM_2_perc.append(((FindingMax(eta_M_2_data[0][:,_])-eta_2_true[_])/eta_2_true[_])*100) #[0] index is indexing to get first chain
-        etaM_2_max.append(FindingMax(eta_M_2_data[0][:,_]))
-        etaM_2_mean.append(eta_M_2_data[0][:,_].mean())
-        etaM_2_std.append(eta_M_2_data[0][:,_].std())
-        
-    for _ in range(len(a_2_true)):  
-        aM_2_abs.append(FindingMax(a_M_2_data[0][:,_])-a_2_true[_]) 
-        aM_2_perc.append(((FindingMax(a_M_2_data[0][:,_])-a_2_true[_])/a_2_true[_])*100) 
-        aM_2_max.append(FindingMax(a_M_2_data[0][:,0]))
-        aM_2_mean.append(a_M_2_data[0][:,_].mean())
-        aM_2_std.append(a_M_2_data[0][:,_].std())
-        
-        bM_2_abs.append(FindingMax(b_M_2_data[0][:,_])-b_2_true[_])
-        bM_2_perc.append(((FindingMax(b_M_2_data[0][:,_])-b_2_true[_])/b_2_true[_])*100)
-        bM_2_max.append(FindingMax(b_M_2_data[0][:,_]))
-        bM_2_mean.append(b_M_2_data[0][:,_].mean())
-        bM_2_std.append(b_M_2_data[0][:,_].std())
-
-    print("M=2")
-    print()
-    print()
-    print("HMC")
-    print()
-    print()
-    print("True values for eta:")
-    print(eta_2_true)
-    print("Absolute errors in eta:")
-    print(etaHMC_2_abs)
-    print("Percentage errors in eta:")
-    print(etaHMC_2_perc)
-    print("Max for eta:")
-    print(etaHMC_2_max)
-    print("Means for eta:")
-    print(etaHMC_2_mean)
-    print("Standard deviations for eta:")
-    print(etaHMC_2_std)
-    print()
-    print("True values for a:")
-    print(a_2_true)
-    print("Absolute errors in a:")
-    print(aHMC_2_abs)
-    print("Percentage errors in a:")
-    print(aHMC_2_perc)
-    print("Max for a:")
-    print(aHMC_2_max)
-    print("Means for a:")
-    print(aHMC_2_mean)
-    print("Standard deviations for a:")
-    print(aHMC_2_std)
-    print()
-    print("True values for b:")
-    print(b_2_true)
-    print("Absolute errors in b:")
-    print(bHMC_2_abs)
-    print("Percentage errors in b:")
-    print(bHMC_2_perc)
-    print("Max for b:")
-    print(bHMC_2_max)
-    print("Means for b:")
-    print(bHMC_2_mean)
-    print("Standard deviations for b:")
-    print(bHMC_2_std)
-
-    print()
-    print()
-    print("Metropolis")
-    print()
-    print("True values for eta:")
-    print(eta_2_true)
-    print("Absolute errors in eta:")
-    print(etaM_2_abs)
-    print("Percentage errors in eta:")
-    print(etaM_2_perc)
-    print("Max for eta:")
-    print(etaM_2_max)
-    print("Means for eta:")
-    print(etaM_2_mean)
-    print("Standard deviations for eta:")
-    print(etaM_2_std)
-    print()
-    print("True values for a:")
-    print(a_2_true)
-    print("Absolute errors in a:")
-    print(aM_2_abs)
-    print("Percentage errors in a:")
-    print(aM_2_perc)
-    print("Max for a:")
-    print(aM_2_max)
-    print("Means for a:")
-    print(aM_2_mean)
-    print("Standard deviations for a:")
-    print(aM_2_std)
-    print()
-    print("True values for b:")
-    print(b_2_true)
-    print("Absolute errors in b:")
-    print(bM_2_abs)
-    print("Percentage errors in b:")
-    print(bM_2_perc)
-    print("Max for b:")
-    print(bM_2_max)
-    print("Means for b:")
-    print(bM_2_mean)
-    print("Standard deviations for b:")
-    print(bM_2_std)
-    print()
-    print()
-
-
-    #HMC
-    etaHMC_3_abs=[]
-    etaHMC_3_perc=[]
-    etaHMC_3_max=[]
-    etaHMC_3_mean=[]
-    etaHMC_3_std=[]
-
-    aHMC_3_abs=[]
-    aHMC_3_perc=[]
-    aHMC_3_max=[]
-    aHMC_3_mean=[]
-    aHMC_3_std=[]
-
-    bHMC_3_abs=[]
-    bHMC_3_perc=[]
-    bHMC_3_max=[]
-    bHMC_3_mean=[]
-    bHMC_3_std=[]
-
-    for _ in range(len(eta_3_true)):
-        etaHMC_3_abs.append(FindingMax(eta_HMC_3_data[0][:,_])-eta_3_true[_])
-        etaHMC_3_perc.append(((FindingMax(eta_HMC_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100) #[0] index is indexing to get first chain
-        etaHMC_3_max.append(FindingMax(eta_HMC_3_data[0][:,_]))
-        etaHMC_3_mean.append(eta_HMC_3_data[0][:,_].mean())
-        etaHMC_3_std.append(eta_HMC_3_data[0][:,_].std())
-        
-    for _ in range(len(a_3_true)):  
-        aHMC_3_abs.append(FindingMax(a_HMC_3_data[0][:,_])-a_3_true[_]) 
-        aHMC_3_perc.append(((FindingMax(a_HMC_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100) 
-        aHMC_3_max.append(FindingMax(a_HMC_3_data[0][:,0]))
-        aHMC_3_mean.append(a_HMC_3_data[0][:,_].mean())
-        aHMC_3_std.append(a_HMC_3_data[0][:,_].std())
-        
-        bHMC_3_abs.append(FindingMax(b_HMC_3_data[0][:,_])-b_3_true[_])
-        bHMC_3_perc.append(((FindingMax(b_HMC_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
-        bHMC_3_max.append(FindingMax(b_HMC_3_data[0][:,_]))
-        bHMC_3_mean.append(b_HMC_3_data[0][:,_].mean())
-        bHMC_3_std.append(b_HMC_3_data[0][:,_].std())
-
-    #Metropolis
-    etaM_3_abs=[]
-    etaM_3_perc=[]
-    etaM_3_max=[]
-    etaM_3_mean=[]
-    etaM_3_std=[]
-
-    aM_3_abs=[]
-    aM_3_perc=[]
-    aM_3_max=[]
-    aM_3_mean=[]
-    aM_3_std=[]
-
-    bM_3_abs=[]
-    bM_3_perc=[]
-    bM_3_max=[]
-    bM_3_mean=[]
-    bM_3_std=[]
-
-    for _ in range(len(eta_3_true)):
-        etaM_3_abs.append(FindingMax(eta_M_3_data[0][:,_])-eta_3_true[_])
-        etaM_3_perc.append(((FindingMax(eta_M_3_data[0][:,_])-eta_3_true[_])/eta_3_true[_])*100) #[0] index is indexing to get first chain
-        etaM_3_max.append(FindingMax(eta_M_3_data[0][:,_]))
-        etaM_3_mean.append(eta_M_3_data[0][:,_].mean())
-        etaM_3_std.append(eta_M_3_data[0][:,_].std())
-        
-    for _ in range(len(a_3_true)):  
-        aM_3_abs.append(FindingMax(a_M_3_data[0][:,_])-a_3_true[_]) 
-        aM_3_perc.append(((FindingMax(a_M_3_data[0][:,_])-a_3_true[_])/a_3_true[_])*100) 
-        aM_3_max.append(FindingMax(a_M_3_data[0][:,0]))
-        aM_3_mean.append(a_M_3_data[0][:,_].mean())
-        aM_3_std.append(a_M_3_data[0][:,_].std())
-        
-        bM_3_abs.append(FindingMax(b_M_3_data[0][:,_])-b_3_true[_])
-        bM_3_perc.append(((FindingMax(b_M_3_data[0][:,_])-b_3_true[_])/b_3_true[_])*100)
-        bM_3_max.append(FindingMax(b_HMC_3_data[0][:,_]))
-        bM_3_mean.append(b_M_3_data[0][:,_].mean())
-        bM_3_std.append(b_M_3_data[0][:,_].std())
-
-    print("M=3")
-    print()
-    print()
-    print("HMC")
-    print()
-    print()
-    print("True values for eta:")
-    print(eta_3_true)
-    print("Absolute errors in eta:")
-    print(etaHMC_3_abs)
-    print("Percentage errors in eta:")
-    print(etaHMC_3_perc)
-    print("Max for eta:")
-    print(etaHMC_3_max)
-    print("Means for eta:")
-    print(etaHMC_3_mean)
-    print("Standard deviations for eta:")
-    print(etaHMC_3_std)
-    print()
-    print("True values for a:")
-    print(a_3_true)
-    print("Absolute errors in a:")
-    print(aHMC_3_abs)
-    print("Percentage errors in a:")
-    print(aHMC_3_perc)
-    print("Max for a:")
-    print(aHMC_3_max)
-    print("Means for a:")
-    print(aHMC_3_mean)
-    print("Standard deviations for a:")
-    print(aHMC_3_std)
-    print()
-    print("True values for b:")
-    print(b_3_true)
-    print("Absolute errors in b:")
-    print(bHMC_3_abs)
-    print("Percentage errors in b:")
-    print(bHMC_3_perc)
-    print("Max for b:")
-    print(bHMC_3_max)
-    print("Means for b:")
-    print(bHMC_3_mean)
-    print("Standard deviations for b:")
-    print(bHMC_3_std)
-
-    print()
-    print()
-    print("Metropolis")
-    print()
-    print("True values for eta:")
-    print(eta_3_true)
-    print("Absolute errors in eta:")
-    print(etaM_3_abs)
-    print("Percentage errors in eta:")
-    print(etaM_3_perc)
-    print("Max for eta:")
-    print(etaM_3_max)
-    print("Means for eta:")
-    print(etaM_3_mean)
-    print("Standard deviations for eta:")
-    print(etaM_3_std)
-    print()
-    print("True values for a:")
-    print(a_3_true)
-    print("Absolute errors in a:")
-    print(aM_3_abs)
-    print("Percentage errors in a:")
-    print(aM_3_perc)
-    print("Max for a:")
-    print(aM_3_max)
-    print("Means for a:")
-    print(aM_3_mean)
-    print("Standard deviations for a:")
-    print(aM_3_std)
-    print()
-    print("True values for b:")
-    print(b_3_true)
-    print("Absolute errors in b:")
-    print(bM_3_abs)
-    print("Percentage errors in b:")
-    print(bM_3_perc)
-    print("Max for b:")
-    print(bM_3_max)
-    print("Means for b:")
-    print(bM_3_mean)
-    print("Standard deviations for b:")
-    print(bM_3_std)
-
+    az.plot_energy(data=trace_multinomial_3_HMC)
+    az.plot_pair(trace_multinomial_3_HMC, var_names=["eta","a","b"], divergences=True)
+    print(az.summary(data=trace_multinomial_3_HMC,var_names=["eta","a","b"]))
+    
+    #az.plot_trace(data=trace_multinomial_3_Metropolis,var_names=["eta","a","b"],divergences=None)
+    #az.plot_pair(trace_multinomial_3_Metropolis, var_names=["eta","a","b"], divergences=True)
+    #print(az.summary(data=trace_multinomial_3_Metropolis, var_names=["eta","a","b"]))
+    
+    data=trace_multinomial_3_HMC.sample_stats
+    
+    print(data['tree_depth'])
+    
 if __name__=='__main__':
     main()

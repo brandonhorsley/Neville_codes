@@ -146,15 +146,15 @@ with pm.Model() as model_multinomial:
 
 
 with model_multinomial:
-    #step1=pm.NUTS([a])
+    step1=pm.NUTS([a])
     #step1=pm.Metropolis([a])
-    #step2=pm.NUTS([a,b])
+    step2=pm.NUTS([a,b])
     #step2=pm.Metropolis([a,b])
-    #step3=pm.NUTS([eta,a,b])
+    step3=pm.NUTS([eta,a,b])
     #step3=pm.Metropolis([eta,a,b])
-    trace_multinomial = pm.sample(draws=int(5e3), chains=4, cores=1,return_inferencedata=True)
-    #trace_multinomial = pm.sample(draws=int(5e3), step=[step1,step2,step3],chains=4, cores=1,return_inferencedata=True)
-    prior = pm.sample_prior_predictive()
+    #trace_multinomial = pm.sample(draws=int(5e3), chains=4, cores=1,return_inferencedata=True)
+    trace_multinomial = pm.sample(draws=int(5e3), step=[step1,step2,step3],chains=4, cores=1,return_inferencedata=True)
+    #prior = pm.sample_prior_predictive()
     
 
 
