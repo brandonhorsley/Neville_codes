@@ -11,6 +11,17 @@ Tough to tackle divergences since diagnostics don't indicate where they originat
 Making voltage errors reflected in the model makes things also tough.
 
 Warning about some parameters having an ESS less than 100 is for the phase shifter that gets omitted from the probability expression.
+
+Non-centred parameterisation means leads to worse sampling. non-centered parameterization does not always leads to better MCMC samples, as it interacts with the hyper priors and data. In general, with informative enough data, centered parameterization is better (“enough” not just the size of data, but how much it constrains posterior). So may stick with centred since it seemsto  work better. Need to understand how noncentred affects data.
+
+Can put bounds to reduce model configuration space so e.g. operating under picture that it is like hopping onto correct mode of optimal configuration and using HMC to sample that mode configuration. Raw HMC struggles with multimodality (not that it can't sample them but will occassionally jump from mode to mode) and if the peaks are funnel-esque(?) then sampling the modes is tough and need to  solve that funnel sampling problem. However imposing these bounds should be well principled, like can we predict model configuration separation, perhaps measure spacing as we scale up to bigger modes, but then this separation also depends on data provided.
+
+Centred parameterisation and default works well for 2 mode case (still can reach large tree depths of 9 or 10 on some chains), the fact that the model doesn't account for one of the pahase shifters leads to royally butchered 'b' plot and high correlation, perhaps from lack of convergence. But then I'm still unsure as to why b[0] is the one that isn't updating and those not converging when b[1] is the phase shifter at the end because phi[1] is the term missing from the probability expressions...
+
+Might make a hypothetical experiment correction of calibrating this element first and thus eliminating it and associated parameters from the inference.
+
+Broadening voltage settings and increasing Voltage draws isn't helping. I think there are some catches to Bernstein-von-Mises?
+
 """
 
 import arviz as az
@@ -31,8 +42,8 @@ def main():
 
     #####################Data generation
 
-    Vmax=10
-    N=100 #Top of page 108 ->N=number of experiments
+    Vmax=100
+    N=1000 #Top of page 108 ->N=number of experiments
 
 
     V_2_dist=np.random.uniform(low=0, high=Vmax,size=2*N).reshape(2,N)
@@ -119,7 +130,7 @@ def main():
     wv=1550E-9
     a_dev=(2*np.pi*L_dev)/wv
     
-    """
+    
     with pm.Model() as model_multinomial1:
         #M=2
 
@@ -133,6 +144,7 @@ def main():
         #sd=0.07
         b=pm.Normal("b", mu=b_2_est, sigma=0.7,initval=[0.7,0.7],shape=2) #array of priors for conciseness
         
+        #Volt=pm.Normal("Volt",mu=V_2_dist,sigma=0.1)
         Volt=pm.Deterministic("Volt",pt.as_tensor(V_2_dist))
         
         phi=pm.Deterministic("phi",a[:,None]+b[:,None]*pm.math.sqr(Volt))
@@ -143,14 +155,17 @@ def main():
 
         P=pm.Deterministic("P",pm.math.stack([p1,p2],axis=-1))
         likelihood=pm.Multinomial("likelihood",n=1000,p=P[0],shape=(N,2),observed=data_2)
+    
     """
-
     with pm.Model() as model_multinomial1:
         #M=2
 
         # Define priors
         #sd=0.05
+        #Formal bounds
         eta_sep=pm.TruncatedNormal("eta_sep",mu=0,sigma=1,lower=0.0,upper=1.0,shape=2) #array of
+        #Bounds to reduce degeneracy
+        #eta_sep=pm.TruncatedNormal("eta_sep",mu=0,sigma=1,lower=0.48,upper=0.52,shape=2) #array of
         eta=pm.Deterministic("eta",[0.5,0.5]+eta_sep*0.05)
         theta=pm.Deterministic("theta",2*pt.arccos(pt.sqrt(eta)))
         #priors for conciseness
@@ -175,6 +190,7 @@ def main():
 
         P=pm.Deterministic("P",pm.math.stack([p1,p2],axis=-1))
         likelihood=pm.Multinomial("likelihood",n=1000,p=P[0],shape=(N,2),observed=data_2)
+    """
     
     with pm.Model() as model_multinomial2:
         #M=3
@@ -209,22 +225,36 @@ def main():
 
     #print(model_multinomial1.free_RVs)
     
+    #centred parameterisation
     with model_multinomial1:
         #Need to index model variables like a dictionary due to shared RV names between models, easier to index than rewrite
-        stepmethod=[pm.NUTS([model_multinomial1['a_sep']]),pm.NUTS([model_multinomial1['a_sep'],model_multinomial1['b_sep']]),pm.NUTS([model_multinomial1['a_sep'],model_multinomial1['b_sep'],model_multinomial1['eta_sep']])]
+        #stepmethod=[pm.NUTS([model_multinomial1['a']],max_treedepth=20),pm.NUTS([model_multinomial1['a'],model_multinomial1['b'],model_multinomial1['Volt']],max_treedepth=20),pm.NUTS([model_multinomial1['a'],model_multinomial1['b'],model_multinomial1['Volt'],model_multinomial1['eta']],max_treedepth=20)]
 
-        trace_multinomial_2_HMC = pm.sample(draws=int(1e3), chains=4, cores=cpucount,step=stepmethod, return_inferencedata=True)
+        #trace_multinomial_2_HMC = pm.sample(draws=int(1e3), chains=4,cores=cpucount, step=stepmethod, return_inferencedata=True)
+        trace_multinomial_2_HMC = pm.sample(draws=int(1e3), chains=4, cores=cpucount, return_inferencedata=True)
         #trace_multinomial_2_Metropolis = pm.sample(draws=int(1e3), step=pm.Metropolis(),chains=4, cores=cpucount, return_inferencedata=True)
-
-    #{'target_accept':0.85}
     
+    """    
+    #noncentred parameterisation
+    with model_multinomial1:
+        #Need to index model variables like a dictionary due to shared RV names between models, easier to index than rewrite
+        #stepmethod=[pm.NUTS([model_multinomial1['a_sep']],max_treedepth=20),pm.NUTS([model_multinomial1['a_sep'],model_multinomial1['b_sep'],model_multinomial1['Volt']],max_treedepth=20),pm.NUTS([model_multinomial1['a_sep'],model_multinomial1['b_sep'],model_multinomial1['Volt'],model_multinomial1['eta_sep']],max_treedepth=20)]
+
+        trace_multinomial_2_HMC = pm.sample(draws=int(1e3), chains=4,cores=cpucount, step=stepmethod, return_inferencedata=True)
+        #trace_multinomial_2_HMC = pm.sample(draws=int(1e3), chains=4, cores=cpucount, return_inferencedata=True)
+        #trace_multinomial_2_Metropolis = pm.sample(draws=int(1e3), step=pm.Metropolis(),chains=4, cores=cpucount, return_inferencedata=True)
+    """
+    
+    #{'target_accept':0.85}
+
+    """
     with model_multinomial2:
 
-        stepmethod=[pm.NUTS([model_multinomial2['a_sep']]),pm.NUTS([model_multinomial2['a_sep'],model_multinomial2['b_sep']]),pm.NUTS([model_multinomial2['a_sep'],model_multinomial2['b_sep'],model_multinomial2['eta_sep']])]
+        stepmethod=[pm.NUTS([model_multinomial2['a_sep']]),pm.NUTS([model_multinomial2['a_sep'],model_multinomial2['b_sep'],model_multinomial2['Volt']]),pm.NUTS([model_multinomial2['a_sep'],model_multinomial2['b_sep'],model_multinomial2['Volt'], model_multinomial2['eta_sep']])]
 
         trace_multinomial_3_HMC = pm.sample(draws=int(1e3), chains=4, cores=cpucount,step=stepmethod,return_inferencedata=True)
         #trace_multinomial_3_Metropolis = pm.sample(draws=int(1e3), step=pm.Metropolis(),chains=4, cores=cpucount, return_inferencedata=True)
-    
+    """
 
     az.plot_trace(data=trace_multinomial_2_HMC,var_names=["eta","a","b"],divergences=True)
     az.plot_energy(data=trace_multinomial_2_HMC)
@@ -236,16 +266,16 @@ def main():
     #print(az.summary(data=trace_multinomial_2_Metropolis,var_names=["eta","a","b"]))
 
     
-    az.plot_trace(data=trace_multinomial_3_HMC,var_names=["eta","a","b"],divergences=None)
-    az.plot_energy(data=trace_multinomial_3_HMC)
-    az.plot_pair(trace_multinomial_3_HMC, var_names=["eta","a","b"], divergences=True)
-    print(az.summary(data=trace_multinomial_3_HMC,var_names=["eta","a","b"]))
+    #az.plot_trace(data=trace_multinomial_3_HMC,var_names=["eta","a","b"],divergences=None)
+    #az.plot_energy(data=trace_multinomial_3_HMC)
+    #az.plot_pair(trace_multinomial_3_HMC, var_names=["eta","a","b"], divergences=True)
+    #print(az.summary(data=trace_multinomial_3_HMC,var_names=["eta","a","b"]))
     
     #az.plot_trace(data=trace_multinomial_3_Metropolis,var_names=["eta","a","b"],divergences=None)
     #az.plot_pair(trace_multinomial_3_Metropolis, var_names=["eta","a","b"], divergences=True)
     #print(az.summary(data=trace_multinomial_3_Metropolis, var_names=["eta","a","b"]))
     
-    data=trace_multinomial_3_HMC.sample_stats
+    data=trace_multinomial_2_HMC.sample_stats
     
     print(data['tree_depth'])
     
