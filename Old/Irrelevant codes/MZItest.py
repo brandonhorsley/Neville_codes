@@ -84,8 +84,8 @@ for k, v in circuit_ordering:
     circuit[k].append(v)
     totalorder.append(k)
 
-#print(circuit)
-#print(totalorder)
+print(circuit)
+print(totalorder)
 
 #Need a seperate function that takes my p_V dictionary that gets passed to my Likelihood function
 #which will have different keys
