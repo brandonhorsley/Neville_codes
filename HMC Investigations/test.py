@@ -1,3 +1,63 @@
+import pymc as pm
+import arviz as az
+import pandas as pd
+import pytensor
+import pytensor.tensor as pt
+import numpy as np
+"""
+k = pt.iscalar("k")
+A = pt.imatrix("A")
+B= pt.imatrix("B")
+
+def inner_fct(A, B):
+    return pt.dot(A, B)
+
+# Symbolic description of the result
+result, updates = pytensor.scan(fn=inner_fct,
+                            outputs_info=pt.ones_like(A),
+                            n_steps=k)
+
+# Scan has provided us with A ** 1 through A ** k.  Keep only the last
+# value. Scan notices this and does not waste memory saving them.
+#final_result = result[-1]
+
+#power = pytensor.function(inputs=[A, B], outputs=final_result,updates=updates)
+
+#print(power(range(10)@range(10), range(10)@range(10), 2))
+"""
+
+"""
+k = pt.iscalar("k")
+#A = pt.vector("A")
+A=pt.matrix("A")
+Ai=pt.matrix("Ai")
+B=pt.matrix("B")
+Bi=pt.matrix("Bi")
+
+
+def mat_mult(prior_result, B):
+    return pt.dot(prior_result, B)
+
+def mat_compmult(A,Ai,B,Bi):
+    #A, Ai = A
+    #B, Bi = B
+    C = pt.dot(A,B) - pt.dot(Ai, Bi)
+    Ci = pt.dot(A, Bi) + pt.dot(Ai, B)
+    return C,Ci
+# Symbolic description of the result
+result, updates = pytensor.scan(fn=mat_compmult,
+                            outputs_info=[A,Ai],
+                            non_sequences=[B,Bi],
+                            n_steps=k)
+
+final_result = result[-1]
+
+power = pytensor.function(inputs=[A,Ai, B,Bi,k], outputs=final_result,
+                      updates=updates)
+
+print(power(np.ones((2,2)), np.ones((2,2)), np.ones((2,2)), np.ones((2,2)), 2))
+"""
+
 """
 Code file to clear up messy previous code writing to make it effective so that I can then pivot to actually just trying more advanced modelling methods (regularising priors, additional info sources..etc)
 
@@ -16,8 +76,9 @@ Active notes:
 - Big idea is that I may have to restucture this code somewhat again since I don't need to reconstruct the whole unitary since all I need is the (real) probabilities that come from it, so rather than focus on constructing the complex-valued unitary, instead focus on constructing the real probability expression, so make 'p_constructor'...etc using the circuit ordering list.
 - Need to circumvent complex numbers altogether, may have to restructure from the ground up since complex numbers occur in both BS and PS matrix so maybe I need to maybe return real and imag when I construct a unitary, but will that even work since I am still making the complex matrix first but just returning real and imaginary bits from the construction function? Is there an alternative way to navigate this? I could have a function that returns the real components of BS/PS and another that returnst the imag components (So real for BS would just be sqrt(eta)*I and imag would be be 0 along diag and sqrt(1-eta) on offdiagonal, keeping phase shifter general it would just be to return sin(phi) for real and cos(phi) for imag). Maybe I'll make a v2 for trying these since I have got this code into a basically working state other than this issue. 
 - Got code that should work, need to tidy up and do it more properly to get speedups
-- fixed faulty Utopreal...etc indexing
+
 """
+
 
 #Import modules
 import arviz as az
@@ -172,6 +233,13 @@ def main():
         Ci = pt.dot(A, Bi) + pt.dot(Ai, B)
         return C, Ci
     
+    def complex_matmult_pymc_2(A, Ai, B, Bi):
+        """"Given `A = A + i * Ai` and `B = B + i * Bi` compute the real and imaginary comonents of `AB`"""
+        #A, Ai = A
+        #B, Bi = B
+        C = pt.dot(A,B) - pt.dot(Ai, Bi)
+        Ci = pt.dot(A, Bi) + pt.dot(Ai, B)
+        return C, Ci
 
     def circuit_list_to_matrix_pymc(feature):
         #Had to be quirky in construct_BS_pymc and construct_PS_pymc since set_subtensor doesn't like replacing 2D tensors or rows or even element by element (breaks down after one element) so had to return a flat tensor and reassign half of the array and then the other half.
@@ -206,10 +274,6 @@ def main():
 
 
     with pm.Model():
-
-        """
-        Free parameters to infer
-        """
         eta=pm.TruncatedNormal("eta",mu=0.5,sigma=0.05,lower=0.0,upper=1.0,initval=0.5) #array of 
         theta=pm.Deterministic("theta",2*pt.arccos(pt.sqrt(eta)))
         #priors for conciseness
@@ -223,9 +287,6 @@ def main():
 
         #below expression breaks down when there is just 1 a and b
         #phi=pm.Deterministic("phi",a[:,None]+b[:,None]*pm.math.sqr(Volt))
-        """
-        phi describes the different phase shifts for different experiments
-        """
         phi=pm.Deterministic("phi",a+b*pm.math.sqr(Volt))
 
         circuit_list=[["BS",eta,1],["PS",phi,1]] #Need to reverse this order for it to be correct
@@ -234,29 +295,50 @@ def main():
         #U_list is an array that I need to dot across but dot via complex_matmul function that I've defined
         #U=pt.nlinalg.matrix_dot(U_list) #Doesn't work raw since PS is a list of N matrices for the N experiments
         
+        """
+        pytensor.ifelse + pt.scan for speedup?
         
-        U=[] #To store final mode Unitaries: U=[(U1,U1i),(U2,U2i),...,(UN,UNi)]
+        def complexmultiplying():
+            rval = U_list[:,i][0]
+            for a in U_list[:,i][1:]:
+                rval=complex_matmult_pymc(rval,a)
+                #U.append(rval)
+            return U
+        """
+
+        #Trying to get pt.scan to work for this case
+        N=pt.iscalar("N")
+
+        #results,updates=pt.scan(fn=complexmultiplying,outputs_info=[pt.ones_like((m,m))],n_steps=N)
+        result, updates = pytensor.scan(fn=complex_matmult_pymc_2,
+                            n_steps=N)
+
+        final_result = result[-1]
+
+        power = pytensor.function(inputs=[A,Ai, B,Bi,k], outputs=final_result,
+                      updates=updates)
+        
+        U=[] #To store final mode Unitary (real and imag components as tuple) array for different experiments
 
         for i in range(N):
             rval = U_list[:,i][0]
             for a in U_list[:,i][1:]:
+                #rval=complex_matmult(rval,a)
                 rval=complex_matmult_pymc(rval,a)
             U.append(rval)
         
-        """
-        Indexing specific elements from each array
-        """
-        Utopreal=[elem[0][0][0] for elem in U] #top left element of each real matrix in U
-        Utopimag=[elem[1][0][0] for elem in U] #top left element of each imag matrix in U
-        Ubotreal=[elem[0][1][0] for elem in U] #bottom left element of each real matrix in U
-        Ubotimag=[elem[1][1][0] for elem in U] #bottom left element of each imag matrix in U
+
+        Utopreal=[elem[0][0,0] for elem in U]
+        Utopimag=[elem[1][1,0] for elem in U]
+        Ubotreal=[elem[0][0,0] for elem in U]
+        Ubotimag=[elem[1][1,0] for elem in U]
 
         """
-        Big slowdown when attempting to call sampling, text indicating initialisation doesn't even show up
+        Big slowdown on P code and below, perhaps graph rewrites are happening, need to alter code to be better
         """
-        #P=pm.math.stack([pt.nlinalg.norm(pm.math.stack([Utopreal,Utopimag],axis=-1),ord='fro',axis=-1)**2,pt.nlinalg.norm(pm.math.stack([Ubotreal,Ubotimag],axis=-1),ord='fro',axis=-1)**2])
-        P=pm.math.stack([pm.math.sqr(Utopreal)+pm.math.sqr(Utopimag),pm.math.sqr(Ubotreal)+pm.math.sqr(Ubotimag)],axis=-1)
-        #print(P.eval()) #Works as expected
+        #P=pm.math.stack([pt.nlinalg.norm(pm.math.stack([Utopreal,Utopimag],axis=-1),ord='fro')**2,pt.nlinalg.norm(pm.math.stack([Ubotreal,Ubotimag],axis=-1),ord='fro')**2])
+        P=pm.math.stack([pm.math.sqr(Utopreal)+pm.math.sqr(Utopimag),pm.math.sqr(Ubotreal)+pm.math.sqr(Ubotimag)])
+        print(P.eval())
         
         likelihood=pm.Multinomial("likelihood",n=C,p=P,shape=(N,m),observed=data)
         

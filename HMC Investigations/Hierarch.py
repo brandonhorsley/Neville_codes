@@ -43,7 +43,7 @@ def main():
     #####################Data generation
 
     Vmax=100
-    N=1000 #Top of page 108 ->N=number of experiments
+    N=10 #Top of page 108 ->N=number of experiments
 
 
     V_2_dist=np.random.uniform(low=0, high=Vmax,size=2*N).reshape(2,N)
