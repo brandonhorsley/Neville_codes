@@ -44,6 +44,7 @@ def mat_compmult(A,Ai,B,Bi):
     C = pt.dot(A,B) - pt.dot(Ai, Bi)
     Ci = pt.dot(A, Bi) + pt.dot(Ai, B)
     return C,Ci
+    
 # Symbolic description of the result
 result, updates = pytensor.scan(fn=mat_compmult,
                             outputs_info=[A,Ai],

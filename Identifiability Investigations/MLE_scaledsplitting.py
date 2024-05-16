@@ -1,0 +1,3 @@
+"""
+This code is to investigate/illustrate identifiability problems from scaling up to bigger circuits, so even by removing the reconfigurability that phase shifters bring, see impact on convergence for just a big chip of beamsplitters, effectively just a series of splitting ratios, intuitively I expect non identifiability even from this too, so ultimately scalable characterisation requires comparative isolation of components and as many info sources as reasonably possible
+"""

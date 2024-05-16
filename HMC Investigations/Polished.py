@@ -260,7 +260,7 @@ def main():
         
         likelihood=pm.Multinomial("likelihood",n=C,p=P,shape=(N,m),observed=data)
         
-        #trace=pm.sample(draws=int(1e3), chains=4, cores=cpucount, return_inferencedata=True)
+        trace=pm.sample(draws=int(1e3), chains=4, cores=cpucount, return_inferencedata=True)
     
     #Diagnostics/Results
     #Usual Arviz diagnostics
