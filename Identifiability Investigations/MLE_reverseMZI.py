@@ -370,8 +370,17 @@ def costfunc(x):
     #print(res)
     return res
 
-result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.5,0.5,0,0,0.7,0.7]),bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
+#result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.5,0.5,0,0,0.7,0.7]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
+result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.3,0.52,0.5,-0.2,0.5,0.83]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
 print(result)
+B=result.hess_inv
+#print(B)
+print(B.todense())
+print(np.linalg.det(B.todense()))
+print(np.linalg.matrix_rank(B.todense()))
+print(np.linalg.eig(B.todense()))
+#B = B * np.identity(B.shape[1])
+#print(B)
 
 #plotting_eta=np.linspace(0,1,100)
 #plotting_res=[]
