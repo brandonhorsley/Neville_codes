@@ -1,9 +1,9 @@
-import pymc as pm
-import arviz as az
-import pandas as pd
-import pytensor
-import pytensor.tensor as pt
-import numpy as np
+#import pymc as pm
+#import arviz as az
+#import pandas as pd
+#import pytensor
+#import pytensor.tensor as pt
+#import numpy as np
 """
 k = pt.iscalar("k")
 A = pt.imatrix("A")

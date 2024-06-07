@@ -11,48 +11,6 @@ fitting A,B,C,theta_0. P_opt is output power, P is power dissipated by heater, g
 Output port power mustn't be interfered, this process is for internal phase shifters, external phase shifters must be done via construction of a meta MZI
 """
 
-"""
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
-
-RANDOM_SEED=0
-rng = np.random.default_rng(RANDOM_SEED)
-
-N=1000
-
-a=2E-4
-b=2E-4
-c=2E-4
-
-A=0.5
-B=0.5
-#C=200
-C=-200 #200 and -200 give same result = locally identifiable
-theta_0=0
-
-V=np.random.uniform(low=0,high=5,size=N)
-Pow_true=a*V+b*(V**2)+c*(V**3)
-#Add noise
-Pow_noise = Pow_true+rng.normal(scale=0.01, size=N)
-
-#plt.plot(V,Pow_true,linestyle='None',marker=".",markersize=10.0)
-#plt.show()
-theta=C*Pow_true - theta_0
-#Popt_true=A*np.cos(C*Pow_true - theta_0)+B
-Popt_true=A*np.cos(theta)+B
-#plt.plot(theta,Popt_true,linestyle='None',marker=".",markersize=10.0)
-#plt.plot(Pow_true,Popt_true,linestyle='None',marker=".",markersize=10.0)
-#plt.show()
-
-def func(x,A,B,C,theta_0):
-    return A*np.cos(C*x - theta_0)+B
-
-popt, pcov=curve_fit(func,Pow_true,Popt_true)
-plt.plot(Pow_true, func(Pow_true, *popt), linestyle='None',marker=".",markersize=10.0)
-print(popt)
-"""
-
 #Import modules
 import arviz as az
 import matplotlib.pyplot as plt
@@ -120,26 +78,32 @@ V=[]
 for _ in range(n_phaseshifters):
     Velem=np.random.uniform(low=0, high=Vmax,size=N) #random voltage between 1 and 5 for phase shifter
     #print(Velem)
-    #Velem=Velem+rng.normal(scale=0.02, size=N) #Adding gaussian noise
+    #Velem=Velem+rng.normal(scale=0.01, size=N) #Adding gaussian noise
     V.append(list(Velem))
 
-V=np.array(V)
+V_true=np.array(V)
+V_meas=V_true+rng.normal(scale=0.01, size=N) #add noise
 
-
-Pow_true=a*V+b*(V**2)+c*(V**3)
+Pow_true=a*V_true+b*(V_true**2)+c*(V_true**3)
+Pow_meas=a*V_meas+b*(V_meas**2)+c*(V_meas**3)
 #Add noise
-Pow_noise=Pow_true
+#Pow_noise=Pow_true
 #Pow_noise = Pow_true+rng.normal(scale=0.01, size=N)
 
 
-phi=C*Pow_true - theta_0 #array
+phi_true=C*Pow_true - theta_0 #array
 #Popt_true=A*np.cos(C*Pow_true - theta_0)+B
-Popt_true=A*np.cos(phi)+B #array
+Popt_true=A*np.cos(phi_true)+B #array
+
+phi_meas=C*Pow_meas - theta_0 #array
+#Popt_meas=A*np.cos(C*Pow_meas - theta_0)+B
+Popt_meas=A*np.cos(phi_meas)+B #array
+
 #plt.plot(theta,Popt_true,linestyle='None',marker=".",markersize=10.0)
 #plt.plot(Pow_true,Popt_true,linestyle='None',marker=".",markersize=10.0)
 #plt.show()
 
-def func(x,A,B,C,theta_0):
+def func(x,A,B,C,theta_0,V_err):
     return A*np.cos(C*x - theta_0)+B
 
 #Provide good initial guess or bump up allowed iterations
@@ -161,7 +125,7 @@ inputmode=0
 P_true=np.empty((N,m))
 for i in range(N):
     #print(phi) #phi already found earlier in PS characterisation stage
-    U_true=constructU(eta1,eta2,phi[0][i])
+    U_true=constructU(eta1,eta2,phi_true[0][i])
     #print(U_true)
     P_click1_true=abs(U_true[0][0])**2 #Probability of click in top
     P_click1_true=P_click1_true
@@ -189,7 +153,7 @@ def costfunc(x):
         #phis=[]
         #for j in range(len(expanded_dict['PS'])):
         #    phis.append(a+b*np.square(V[]))
-        phi_est=popt[2]*Pow_noise - popt[3]
+        phi_est=popt[2]*Pow_meas - popt[3]
         #U_true=gen_constructU(eta,phis, m, circuit_ordering)        
         U=constructU(eta1,eta2,phi_est[0][i])
         P_click1=abs(U[0][0])**2 #Probability of click in top
@@ -209,7 +173,7 @@ def costfunc(x):
 #result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.5,0.5,0,0,0.7,0.7]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
 #scipy.optimize.minimize is local optimisation, not global.
 #result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.3,0.52]),method='L-BFGS-B',bounds=[(0,1),(0,1)])
-minimizer_kwargs = { "method": "L-BFGS-B","bounds":[(0,1),(0,1)] }
+minimizer_kwargs = { "method": "L-BFGS-B","bounds":[(0,1),(0,1)]}
 result=scipy.optimize.basinhopping(func=costfunc,x0=np.array([0.9,0.1]),minimizer_kwargs=minimizer_kwargs)
 print(result)
 

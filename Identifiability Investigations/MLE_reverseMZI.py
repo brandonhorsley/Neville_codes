@@ -369,16 +369,22 @@ def costfunc(x):
         res+=scipy.linalg.norm(P[_]-P_test[_],ord=2)
     #print(res)
     return res
+#print(P)
+print(len(P[:,0]))
+#print(V)
+plt.plot(P[:,0],V[0],linestyle='None',marker=".",markersize=10.0)
+#plt.plot(P[:,0],a1+b1*np.array(V[0])**2,linestyle='None',marker=".",markersize=10.0)
+plt.show()
 
 #result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.5,0.5,0,0,0.7,0.7]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
-result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.3,0.52,0.5,-0.2,0.5,0.83]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
-print(result)
-B=result.hess_inv
+#result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.3,0.52,0.5,-0.2,0.5,0.83]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
+#print(result)
+#B=result.hess_inv
 #print(B)
-print(B.todense())
-print(np.linalg.det(B.todense()))
-print(np.linalg.matrix_rank(B.todense()))
-print(np.linalg.eig(B.todense()))
+#print(B.todense())
+#print(np.linalg.det(B.todense()))
+#print(np.linalg.matrix_rank(B.todense()))
+#print(np.linalg.eig(B.todense()))
 #B = B * np.identity(B.shape[1])
 #print(B)
 
