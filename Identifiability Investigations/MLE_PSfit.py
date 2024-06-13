@@ -103,7 +103,7 @@ Popt_meas=A*np.cos(phi_meas)+B #array
 #plt.plot(Pow_true,Popt_true,linestyle='None',marker=".",markersize=10.0)
 #plt.show()
 
-def func(x,A,B,C,theta_0,V_err):
+def func(x,A,B,C,theta_0):
     return A*np.cos(C*x - theta_0)+B
 
 #Provide good initial guess or bump up allowed iterations
@@ -112,7 +112,7 @@ def func(x,A,B,C,theta_0,V_err):
 popt, pcov=curve_fit(f=func,xdata=Pow_true[0],ydata=Popt_true[0],p0=[0.45,0.45,190,0])
 
 print(popt) #output params, pcov conveys covariance which could be useful for keeping bayesianish
-
+print(pcov)
 #print(V)
 #Data Generation
 
