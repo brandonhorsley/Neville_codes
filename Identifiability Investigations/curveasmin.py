@@ -63,3 +63,11 @@ p0 = [0.5, 0.5, 190,0]  # initial guess
 minimizer_kwargs = { "method": "L-BFGS-B"}
 res=scipy.optimize.basinhopping(func=cost,x0=p0,minimizer_kwargs=minimizer_kwargs)
 print(res)  # see if minimization succeeded.
+
+"""
+Basin hopping is a global method but lowest optimisation result from print(res) has 
+Hessian Inverse 'hess_inv', need to use todense() to make a matrix array, then you 
+can obtain the standard error of the estimated parameters by taking the sqrt of the 
+diagonal of the Hessian inverse 
+"""
+print(np.sqrt(np.diag(res.lowest_optimization_result.hess_inv.todense())))

@@ -3,18 +3,12 @@ Bayesian version of PS curve fitting characterisation
 """
 
 #Import modules
-import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 import scipy.optimize
 import scipy.stats
 import multiprocessing
-import collections
-from collections import defaultdict
-from matplotlib import cbook, cm
-from matplotlib.colors import LightSource
-from scipy.optimize import curve_fit
 import pymc as pm
 import arviz as az
 
@@ -67,10 +61,11 @@ with pm.Model() as model:  # model specifications in PyMC are wrapped in a with-
 
     # Inference!
     # draw 3000 posterior samples using NUTS sampling
-    idata = pm.sample(3000)
+    idata = pm.sample(3000,cores=1)
+#print(idata.posterior['A'])
+az.plot_trace(data=idata) #Show traceplots
 
-az.plot_trace(data=idata)
-
+print(az.summary(idata)) #Can look at sd to see standard deviation to compare to curveasmin
 """
 Trying to infer a,b,c as well botches performance, again likely rooted in identifiability with too many free params/freedom?
 Also sigma=1 leads to OK performance but stricter priors (0.1) leads to far better performance.
