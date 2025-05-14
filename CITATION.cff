@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: Neville Codes
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Brandon
+    family-names: Horsley
+    email: brandonhorsley99@hotmail.co.uk
+    affiliation: University of Bristol
+repository-code: 'https://github.com/brandonhorsley/Neville_codes/'
+abstract: >-
+  Collection of codes pertaining to replicating some results
+  from Alex Neville's thesis, as well as my own works in
+  attempts to improve it. These are covered in my PhD
+  thesis.
+commit: 35f0299
