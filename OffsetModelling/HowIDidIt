@@ -1,0 +1,13 @@
+open lumerical file
+right click waveguide_2D_Cross_Section
+edit object
+change parameters in line with data
+apply
+ok
+right click waveguide_source
+edit object
+click 'Select Mode'
+say Yes to warning
+press calculate modes
+top mode in list is one chosen
+then cancel out of windows to work on next set of measured data
