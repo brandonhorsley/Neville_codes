@@ -1,0 +1,5 @@
+Following continued trouble with getting my codes to work as intended, I pivoted to using (the then postdoc) 
+Emilien's code and fleshing it out to contain all of the Alex Neville protocol as originally he had only written 
+in the metropolis algorithm for sampling. This first implementation is BSPS_coherentstate.py, covering a beamsplitter 
+and phase shifter to be characterised. However he uses a coherent state input and uses the analytical expression for the 
+click probability as a result. 
