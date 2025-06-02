@@ -2,7 +2,7 @@
 Investigation to gauge the sensitivity of changing eta values and a values and b values. My initial 
 investigation will be to just individually plot detuning from true against trace distance.
 
-It occurs to me that it will actually be quite tough to incorporate things, i kinda got close with Neville_thesis_3.py
+It occurs to me that it will actually be quite tough to incorporate things, i kinda got close with Tunable_4_3.py
 where i investigated how changing etas affects the phi1 v phi2 plot which seemed to generate a particular relationship.
 But then finding phi is awkward because it is a function of a and b and V. a will be linear with fixing b and V since 
 it is just an offset term. So all that is left is thinking about b and V which in our model which is essentially
@@ -11,21 +11,23 @@ y=ax**2 so dy/dx=2ax
 
 I will focus on investigating the relationship between y, a and x first and then this should complete my 
 intuition around a,b,V affecting phi values, and my knowledge of eta values and phi values from 
-Neville_thesis_3.py
+Tunable_4_3.py
 
-Plot completed, the key thing seems to be that increasing V means distance between peaks (where modulo kicks in) 
+Active Notes:
+
+- Plot completed, the key thing seems to be that increasing V means distance between peaks (where modulo kicks in) 
 gets shorter and shorter, and lower b values means shallower rise so less distance sharp impact on phi. So then 
 i think perhaps really sensitivity of the landscape is proportional to both b and V so such a procedure becomes 
 less wise to do with larger b and V. a is just a matter of proportionality since it is an offset term. Each eta 
 value in the toy example has a unique relationship to phi and the smearing that is seen interestingly seems to 
 mean that more detuning of eta leads to less of an impact as phi values change...
 
-So all this intuition is only really directed towards the toy example but it could be worth thinking then about 
+- So all this intuition is only really directed towards the toy example but it could be worth thinking then about 
 impact on performance as needing stricter reparameterisation and an even more precise estimate for larger b (and V). 
 a is pretty agnostic. I think eta smearing is pretty reasonable for the toy example, i am also curious though about 
 how eta sensitivity depends on number of elements, i would wager more components means more sensitivity...
 
-Primitive test on more components leads me to think maybe the dependence is actually the same 'individually', although
+- Primitive test on more components leads me to think maybe the dependence is actually the same 'individually', although
 along some dimensions it doesn't change as much but all in all seems fairly reasonable. The phi1,phi2 peaks are still 
 generally present sometimes they are just one peak or sometimes two.
 """

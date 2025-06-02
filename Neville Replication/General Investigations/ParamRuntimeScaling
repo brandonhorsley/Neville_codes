@@ -1,4 +1,3 @@
-"""
 This code file will be dedicating to investigating how MCMC generation scales with number of parameters 
 to be estimated. 
 
@@ -35,4 +34,3 @@ but certainly much less of an impact than MCMC length.
 
 Even then in the hypothetical case of imagining larger circuits with many more components and thus many more parameters,
 perhaps breaking down into hierarchical blocks and/or parallelisation could be beneficially impactful.
-"""
