@@ -1,0 +1,6 @@
+Mod_BSPS is the original main code, applying the modified algorithm to a beamsplitter and phase shifter. 
+Hierarch.py is the code file where I toyed with hierarchical modelling to alleviate issues. Polished.py should 
+have solved an issue I was having where PyMC doesn't like complex gradients which are detected by complex entries 
+occurring in the unitary (even though the probability is real), so one way to handle this is to manage the real and 
+imaginary components separately then recombine accordingly at the end. Note this is the reason for the inordinately 
+long p in Hierarch.py, related to the Scaling Up subfolder.
