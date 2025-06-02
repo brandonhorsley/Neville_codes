@@ -1,0 +1,8 @@
+A mixture of investigations I did during my PhD proess of trying to replicated Neville's work. 
+Earlier entries were ParamRuntimeScaling which was me just recording the runtime of my code for different 
+parameters to characterised and different MCMC chain length to get a rough sense of the situation. 
+ExploringPosterior was getting a sense of the posterior geometry from a uniform prior and multinomial likelihood. 
+PriorInv_unfinished was a good point of trialling different priors but I didn't get round to this too much and is 
+thus unfinished and a bit of a mess. DetuningInv was a later entry once I pinned down multimodality/identifiability as 
+the source of my woes, so I wanted to get a sense of what detuning of each parameter could lead to convergence on the 
+wrong set of parameters.

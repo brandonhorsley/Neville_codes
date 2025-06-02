@@ -1,0 +1,6 @@
+MLE variant of the Unitary reconstruction idea. The original code is in Neville_MLE.py, also included 
+in this folder is an application of the idea to a reverse MZI where I also have a block near the end for 
+evaluating how the costfunction surface changes for sweeping parameters. I extend this idea in the scaledsplitting 
+code where it is just a larger and larger mesh of beamsplitters as when I got to identifiability investigations I 
+thought about how the multiple paths to a given click pattern becomes worse and worse with bigger meshes, so I was 
+testing the waters with that.
