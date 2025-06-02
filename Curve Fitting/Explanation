@@ -1,0 +1,9 @@
+This folder contains the varied parts of the curve fitting approach. MLE_PSfit.py is the original 
+implementation, using scipy's inbuilt curve_fit function. bayesianPS.py is the original Bayesian version 
+of the curve fitting algorithm by putting priors on the parameters to infer. Scipy's curve fitting function doesn't 
+allow regularisation so curveasmin.py reexpresses the curve fitting problem as it's equivalent minimisation problem 
+formulation. FullBayesCharacterisation is virtually equivalent to bayesianPS, FullBayesHardcoded is 
+FullBayesCharacterisation but the process of doing this to navigate a whole unitary chip is hardcoded in 
+(this runs but gave poor performance, partly I think due to needing a point estimate to set an MZI to as part of the 
+full process which kind of undermines the bayesian approach). FullMLEHardcoded was to see if the same problem still held 
+for the MLE implementation.
