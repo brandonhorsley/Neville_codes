@@ -1,11 +1,8 @@
 """
-Code file of hardcoding a full characterisation, using Dave's characterisation of an MZI but with the overarching process from Niko di Giano thesis.
+Code file of hardcoding a full characterisation with MLE to compare to Bayes equivalent to see if problem is bayesian or implementation.
 
-- A rare case is what if any of the other following MZIs along a diagonal when calibrating are already set to transmission point, then power at output will be zero
-- Dave's fitting to cosine comes from matrix expression, frankly the parameters are mostly meaningless except for knowing the transmission and reflection point ('A' scales based on power at output which just depends on routing settings of the other MZIs)
-- If the Acos(phi)+B is to mirror the unitary transformation then surely the parameters will be a function of phi too?
-- What does beamsplitter imbalance do to characterisation protocol
--Getting mode of posterior didn't seem to help, even worsened slightly
+- datagen was wrong, need to slice modeU[output,input], and gives a complex number which is why you need complex conjugate and thus curve fit should be Acos^2
+-cos squared curve isn't constant due to nonlinearity in IV response leading to changing variable phase, its why in Niko thesis he uses adjusted current ramp, will truncate at 2V as an intermediary solution
 """
 
 #Import modules
@@ -14,12 +11,9 @@ import multiprocessing
 import arviz as az
 import pymc as pm
 import scipy
-import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 
-#Testing rotation metric
-#X=np.array([[0,1],[1,0]],dtype=np.complex128)
-#I=np.array([[1,0],[0,1]],dtype=np.complex128)
-#print(np.arccos((np.trace(X.conj().T@I))/(2*np.sqrt(np.linalg.det(X.conj().T@I)))))
+
 
 #Priming
 cpucount=multiprocessing.cpu_count()
@@ -29,7 +23,7 @@ az.style.use("arviz-darkgrid")
 
 #Define key parameters and arrays
 m=6
-N=1000
+N=10000
 
 n_MZI=int(m*(m-1)/2)
 V_global=np.zeros((n_MZI,))
@@ -58,14 +52,23 @@ C_true=np.zeros((n_MZI,))
 C_true+=1+rng.normal(scale=.1, size=(n_MZI,))
 #print(C_true)
 theta0_true=np.zeros((n_MZI,))
-theta0_true+=rng.normal(scale=.1, size=(n_MZI,))
+theta0_true+=rng.normal(scale=.01, size=(n_MZI,))
+
 
 
 order=[1,6,2,7,14,8,13,9,12,5,11,4,10,3,0] #order of MZIs to multiply to get final unitary
 positions=[3,1,4,2,0,3,1,4,2,0,3,1,4,2,0] #waveguide each MZI is on
 
 V = np.random.uniform(low=0, high=V_max, size=(N,))  # without noise, value we believe we are setting
+#V = np.random.uniform(low=2, high=3, size=(N,))  # without noise, value we believe we are setting
 V_noisy = V + rng.normal(scale=0.05, size=(N,))  # extra noise on voltage, value actually set
+
+#import matplotlib.pyplot as plt
+
+#theta=a_true[0]*V+b_true[0]*V**2+c_true[0]*V**3
+#y=A_true[0]*np.cos(C_true[0]*theta-theta0_true[0])**2
+#plt.plot(V,y,'s') #is this that is causing the problems, could be a,b,c params leading to too strong nonlinear response?
+#plt.show()
 
 def idealMZI(phi): #assume both 50:50 beamsplitters
     globalfactor=np.exp(1j*(phi/2 + np.pi/2))
@@ -106,59 +109,24 @@ def DataGen(MZI_no,input,output):
 def curvefit(MZI_no,InputPort,OutputPort):
     #Produce data
     clickdata=DataGen(MZI_no,InputPort,OutputPort)
-    
-    #import matplotlib.pyplot as plt
+    #print(clickdata)
+    import matplotlib.pyplot as plt
 
-    #plt.plot(V,clickdata,'s')
-    #plt.show()
-
-    #do pymc process
-    with pm.Model() as model:  # model specifications in PyMC are wrapped in a with-statement
-        # Define priors
-        #a = pm.Normal("a", 2E-4,sigma=1)
-        #b = pm.Normal("b", 2E-4,sigma=1)
-        #c = pm.Normal("c", 2E-4,sigma=1)
-        A = pm.Normal("A", 1,sigma=.1)
-        #B = pm.Normal("B", 0,sigma=.1)
-        C = pm.Normal("C", 1,sigma=.1)
-        theta_0 = pm.Normal("theta_0",0,sigma=.1)
-
-        # Define likelihood
-        #likelihood = pm.Normal("P_opt", mu=A*pm.math.cos(C * (a * V + b * (V ** 2) + c * (V ** 3)) - theta_0) + B, sigma=.1, observed=clickdata)
-        #I think model is using wrong voltage array, no accounting for all MZIs?
-        likelihood = pm.Normal("P_opt", mu=A*pm.math.cos(C * (a_true[MZI_no] * V + b_true[MZI_no] * (V ** 2) + c_true[MZI_no] * (V ** 3)) - theta_0)**2, sigma=.1, observed=clickdata)
-
-        # Inference!
-        # draw 3000 posterior samples using NUTS sampling
-        idata = pm.sample(3000,cores=1)
-    
-    az.plot_trace(idata)
+    plt.plot(V,clickdata,'s')
     plt.show()
-    #return parameters and voltage for complete transmission+complete reflection
-    table=az.summary(idata)
-    #print(table['mean']['A'])
-    #Take max likelihood value for each of the parameters
-    #A_max=print(idata.posterior['A'])
     
-    A_max=table['mean']['A']
-    #B_max=table['mean']['B']
-    C_max=table['mean']['C']
-    theta_0_max=table['mean']['theta_0']
+    #do MLE process and return key paramaters and voltage for complete transmission+complete reflection
+    def func(x,A,C,theta_0):
+        return A*np.cos(C*x - theta_0)**2
 
-    print(A_max)
-    #print(B_max)
-    print(C_max)
-    print(theta_0_max)
-    
-    #A_max=scipy.stats.mode(idata.posterior['A'][0],axis=0).mode
-    #B_max=scipy.stats.mode(idata.posterior['B'][0],axis=0).mode
-    #C_max=scipy.stats.mode(idata.posterior['C'][0],axis=0).mode    
-    #theta_0_max=scipy.stats.mode(idata.posterior['theta_0'][0],axis=0).mode
-    
-    #print(A_max)
-    #print(B_max)
-    #print(C_max)
-    #print(theta_0_max)
+    #Provide good initial guess or bump up allowed iterations
+    #popt, pcov=curve_fit(func,Pow_noise[0],Popt_true[0])
+    #plt.plot(Pow_true[0],Popt_true[0],linestyle='None',marker=".",markersize=10.0)
+    popt, pcov=curve_fit(f=func,xdata=V,ydata=clickdata,p0=[1,1,0])
+    A_max=popt[0]
+    #B_max=popt[1]
+    C_max=popt[1]
+    theta_0_max=popt[2]
 
     #Transmission/reflection means just find point where minimum is or maximum is
     P_ref=(np.pi+theta_0_max)/C_max
