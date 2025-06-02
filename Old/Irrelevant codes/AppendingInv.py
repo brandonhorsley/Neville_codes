@@ -1,3 +1,0 @@
-"""
-This code file is intended to further the investigation from Defaultdict.py since for some reason appending p from my main code seems to repetitively generate errors for some reason and so this will be to explore 'why' further and even just define an alternative code structure for my Alg4 which i reckon will just entail me turning it from a dictionary into an array to then get appended since the appending component is only for the MCMC application of it.
-"""
