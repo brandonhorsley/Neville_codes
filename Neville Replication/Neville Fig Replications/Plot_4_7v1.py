@@ -23,10 +23,8 @@ https://discourse.pymc.io/t/multivariate-multinomial-logistic-regression/5242/2
 https://gist.github.com/jeetsukumaran/2840020
 https://www.pymc.io/projects/docs/en/v3/pymc-examples/examples/mixture_models/dirichlet_mixture_of_multinomials.html
 
-Current layout not working because I am not using the likelihood correctly in the model context block.
+Believe current layout not working because I am not using the likelihood correctly in the model context block?
 https://www.pymc.io/projects/examples/en/latest/case_studies/blackbox_external_likelihood_numpy.html
-
-
 """
 
 import arviz as az

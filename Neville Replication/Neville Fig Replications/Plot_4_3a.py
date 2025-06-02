@@ -1,6 +1,6 @@
 """
 Code for reproducing Fig 4.3a of Alex Neville thesis. This code is basically the same as
-Neville_thesis_1.py but with different eta values.
+fig 4.2 but with different eta values.
 """
 
 import matplotlib
