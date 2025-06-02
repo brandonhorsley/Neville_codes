@@ -1,0 +1,7 @@
+This folder is for generalisations I did to the original code to allow inputs of arbitrary circuits, 
+to avoid hardcoding in the circuits and having to change a bunch of things in the code. gen_Aux_Nev applies 
+this generalisation to Aux_Nev, gen_MainCode implements the arbitrary circuit input but it still restricted 
+to two modes, v2 was for generalising to more output modes but I'm uncertain if I finished debugging it. 
+Restructured.py is a later entry where I tidied up the generalised code as it was sloppy in places, like finding 
+the probability then taking the log, rather than just taking the logprob directly. The testing folder tests gen_MainCode 
+and Restructured on a beamsplitter and phase shifter.
