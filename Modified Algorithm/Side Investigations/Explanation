@@ -1,0 +1,8 @@
+MISvsHMC was for a comparison analysis between MIS and the HMC algorithm but ultimately unfinished since I was 
+using sampling boson sampling distribution as an example which MIS is fine for since you can explicitly make it so 
+that proposals are valid (no gain or loss of photons) and is fine for discrete probability spaces but HMC is for 
+continuous probability spaces and final state in trajectory being valid could be a major challenge to enforce so 
+didn't finish. SMC_Inv was toying with PyMC's sequential monte carlo (SMC) routine since it is better at handling 
+multimodality than HMC but I think I didn't finish debugging. AR_Inv was an example code about time series which I 
+think was about thinking that maybe the count data modelling could be done as a time series and maybe causal inference. 
+Ultimately abandoned due to lack of time to investigate as would basically be a distinct project.
