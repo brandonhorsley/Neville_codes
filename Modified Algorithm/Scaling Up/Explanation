@@ -1,0 +1,20 @@
+This folder is for my efforts to testing scalability in the modified algorithm. This ultimately had a 
+bit of an issue where implementing this characterisation code in pymc is touchy around complex numbers, 
+like the complex valued entries of a unitary so implementing the previous process of calculate the unitary, 
+then index...etc to get the probability, as even though the probability deterministic node is the thing used 
+in the likelihood, it still threw an error. 
+
+My initial patch fix is contained in the folder 'Calculating Patch Fix' whereby I figured I would just hardcode 
+in the expression for the probability for different size reck schemes (2,3, and 4 mode but 4 was too unwieldly) 
+and I did this by using quandelas perceval framework (Calculator.ipynb) as it has a function to give you the 
+symbolic unitary matrix in LaTeX and then use a LaTeX to sympy converter, maybe simplify/process the sympy expression 
+if needed (SympyConverter.ipynb), then put the symbolic variables how I wanted (e.g. theta_0 to theta[0] by find and replace 
+functionality in the IDE). Note that debug.ipynb was where the sympy converter file was struggling so I tried separating out 
+the entries a bit more so it was more computationally digestible but the same issues happened for some entries.
+
+Ultimately suboptimal fix, but these deterministic expressions are done in ScaledPyMC. A better fix is 
+found in Polished.py in the Main Codes subfolder. ScalingCircuit_unfinished was a file on trying to automate the 
+characterisation process. Initially the idea was to calculate the number of AMZIs in a given scheme for a given 
+number of modes (which was done) and then use this to generate the unitary matrix and do all the necessary calculations 
+(unfinished as keeping track of indexing so you can match the results to the right MZIs is a bit nontrivial and wasn't 
+worth the time).
