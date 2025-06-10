@@ -106,7 +106,7 @@ def constructU_from_p(etas,phis):
     return U
 
 Vmax=5
-N=100 #Top of page 108 ->N=number of experiments
+N=50 #Top of page 108 ->N=number of experiments
 M=2 #Number of modes
 
 #Since each phase shifter has its own set of voltages applied to each other the block of code below makes one array for each phase shifter.
@@ -117,7 +117,7 @@ for _ in range(len(circuit['PS'])):
     V.append(list(Velem))
 
 expanded_dict= circuit.copy()
-expanded_dict['V'].append(V) #exppanded_dict has circuit parameters and the voltages as another key
+expanded_dict['V'].append(V) #expanded_dict has circuit parameters and the voltages as another key
 
 """
 but then to generate phi values i need to relate a,b values as well as the voltage across each phase shifter for a given experiment so what may be necessary is another default_dict
@@ -170,7 +170,7 @@ def Likelihood(**p_V):
         P_click2=P_click2[0][0]
         P[i]=[P_click1,P_click2]
         #n=C,p=P,x=array of clicks
-        prob[i]=np.log(scipy.stats.multinomial.pmf(x=data[i],n=C[i],p=P[i]))
+        prob[i]=scipy.stats.multinomial.logpmf(x=data[i],n=C[i],p=P[i])
         if np.isinf(prob[i]):
             prob[i]=0 #To bypass -inf ruining likelihood calculations.
     logsum=np.sum(prob)
@@ -210,7 +210,7 @@ b_sigma=b_est #Based around true values from Neville_thesis_8.py
 #N_iters=100000
 
 #I=[2,500,50,50,500,100,100,100_000] #Determines iteration number for each algorithm call, 100_000 allowed since python 3.6
-I=[2,500,50,50,500,100,100,100]
+I=[2,500,50,50,500,100,100,100_000]
 
 
 ###Burn in###
@@ -339,7 +339,8 @@ def Alg4(Niters,Markov=False,ReturnAll=False,**p):
             for k,v in p.items():
                 if k == 'eta': #If it is eta's
                     for i in range(len(v)):
-                        new_element=np.random.normal(loc=p['eta'][i],scale=eta_sigma) #draw random sample from proposal distribution
+                        #new_element=np.random.normal(loc=p['eta'][i],scale=eta_sigma) #draw random sample from proposal distribution
+                        new_element=scipy.stats.truncnorm.rvs(0,1,loc=p[i],scale=eta_sigma)
                         p_prime=p.copy()
                         p_prime['eta'][i]=new_element
                         #Likelihood
