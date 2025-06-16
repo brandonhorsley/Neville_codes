@@ -3,4 +3,4 @@ Hierarch.py is the code file where I toyed with hierarchical modelling to allevi
 have solved an issue I was having where PyMC doesn't like complex gradients which are detected by complex entries 
 occurring in the unitary (even though the probability is real), so one way to handle this is to manage the real and 
 imaginary components separately then recombine accordingly at the end. Note this is the reason for the inordinately 
-long p in Hierarch.py, related to the Scaling Up subfolder.
+long p in Hierarch.py, related to the Scaling Up subfolder. However on running the code, Polished.py is very slow as I didn't finish figuring out how to express the nitty gritty of the unitary stuff in a pytensor way, using normal for loops and arrays causes a big slowdown as pymc builds node graphs and stuff for the computation.

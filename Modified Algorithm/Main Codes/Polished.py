@@ -227,7 +227,9 @@ def main():
         phi describes the different phase shifts for different experiments
         """
         phi=pm.Deterministic("phi",a+b*pm.math.sqr(Volt))
-
+        """
+        I think this is really the bulk of the issues, you aren't expressing it in a pytensor format, hence major slowdowns from here and below
+        """
         circuit_list=[["BS",eta,1],["PS",phi,1]] #Need to reverse this order for it to be correct
         
         U_list = np.array([circuit_list_to_matrix_pymc(feature) for feature in circuit_list])
@@ -253,6 +255,7 @@ def main():
 
         """
         Big slowdown when attempting to call sampling, text indicating initialisation doesn't even show up
+        Only slowsdown when sampling is called because otherwise the model block doesn't actually run anything
         """
         #P=pm.math.stack([pt.nlinalg.norm(pm.math.stack([Utopreal,Utopimag],axis=-1),ord='fro',axis=-1)**2,pt.nlinalg.norm(pm.math.stack([Ubotreal,Ubotimag],axis=-1),ord='fro',axis=-1)**2])
         P=pm.math.stack([pm.math.sqr(Utopreal)+pm.math.sqr(Utopimag),pm.math.sqr(Ubotreal)+pm.math.sqr(Ubotimag)],axis=-1)
@@ -264,6 +267,7 @@ def main():
     
     #Diagnostics/Results
     #Usual Arviz diagnostics
+    az.plot_trace(data=trace,var_names=["eta","a","b"],divergences=None)
     #Could be good to get a unitary 'closeness' measure like TVD that takes the inference and translates that into an experimentally relevant measure that way
     
 if __name__=='__main__':

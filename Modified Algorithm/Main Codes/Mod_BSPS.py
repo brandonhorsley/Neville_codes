@@ -106,11 +106,11 @@ data,C,P=DataGen(InputNumber=1000,Voltages=V,poissonian=False)
 with pm.Model() as model_multinomial:
     # Define priors
     #eta = pm.Normal("eta", mu=0.5, sigma=0.05,initval=0.5)
-    eta=pm.TruncatedNormal("eta",mu=0.6,sigma=0.05,lower=0.0,upper=1.0,initval=0.7)
+    eta=pm.TruncatedNormal("eta",mu=0.5,sigma=0.05,lower=0.0,upper=1.0,initval=0.7)
     #a= pm.Uniform("a", lower=-np.pi, upper=np.pi,initval=0)
     a=pm.TruncatedNormal("a",mu=0,sigma=0.1,lower=-np.pi,upper=np.pi)
     #a= pm.Normal("a", mu=0.1, sigma=np.pi/200,initval=0.5)
-    b= pm.Normal("b", mu=0.5, sigma=0.07,initval=0.75)
+    b= pm.Normal("b", mu=0.7, sigma=0.07,initval=0.75)
     
     Volt=pm.Deterministic("Volt",pt.as_tensor(V_dist))
     phi=pm.Deterministic("phi",(a+b*pm.math.sqr(Volt)))
@@ -125,7 +125,8 @@ with pm.Model() as model_multinomial:
 
 
 with model_multinomial:
-    trace_multinomial = pm.sample(draws=int(5e3), chains=4, cores=1,return_inferencedata=True)
+    #trace_multinomial = pm.sample(draws=int(5e3), chains=4, cores=1,return_inferencedata=True)
+    trace_multinomial = pm.sample(draws=int(250), chains=4, cores=1,return_inferencedata=True)
     prior = pm.sample_prior_predictive()
     
 
