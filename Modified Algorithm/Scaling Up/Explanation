@@ -18,3 +18,7 @@ characterisation process. Initially the idea was to calculate the number of AMZI
 number of modes (which was done) and then use this to generate the unitary matrix and do all the necessary calculations 
 (unfinished as keeping track of indexing so you can match the results to the right MZIs is a bit nontrivial and wasn't 
 worth the time).
+
+FidelityCalc.py is for taking the point estimates from ScaledPyMC and using to find the process fidelity. This could be 
+done in the same code but I didn't think about this until after running, and due to extreme runtimes I figured it would 
+be easier for me time-wise to just get an example average fidelity in a separate file.

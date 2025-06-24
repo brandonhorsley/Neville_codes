@@ -185,9 +185,9 @@ def main():
 
     with model_multinomial2:
         #trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=2, cores=1,return_inferencedata=True,nuts={'target_accept':0.85})
-        trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=4, cores=cpucount,return_inferencedata=True,nuts={'target_accept':0.85})
+        trace_multinomial_3_HMC = pm.sample(draws=int(5e3), chains=2, cores=cpucount,return_inferencedata=True,nuts={'target_accept':0.85})
         #trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=1, return_inferencedata=True)
-        trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=4, cores=cpucount, return_inferencedata=True)
+        trace_multinomial_3_Metropolis = pm.sample(draws=int(5e3), step=pm.Metropolis(),chains=2, cores=cpucount, return_inferencedata=True)
 
 
     az.plot_trace(data=trace_multinomial_2_HMC,var_names=["eta","a","b"],divergences=None)
