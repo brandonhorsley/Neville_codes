@@ -119,7 +119,7 @@ def costfunc(x):
         #phis=[]
         #for j in range(len(expanded_dict['PS'])):
         #    phis.append(a+b*np.square(V[]))
-        phi=a1+b1*V[0][i]**2
+        phi1=a1+b1*V[0][i]**2
         phi2=a2+b2*V[1][i]**2
         #U_true=gen_constructU(eta,phis, m, circuit_ordering)        
         U=constructU(eta1,eta2,phi1,phi2)
@@ -137,23 +137,164 @@ def costfunc(x):
     #print(res)
     return res
 #print(P)
-print(len(P[:,0]))
+#print(len(P[:,0]))
 #print(V)
-plt.plot(P[:,0],V[0],linestyle='None',marker=".",markersize=10.0)
+
+#Uncomment below
+#plt.plot(P[:,0],V[0],linestyle='None',marker=".",markersize=10.0)
+
 #plt.plot(P[:,0],a1+b1*np.array(V[0])**2,linestyle='None',marker=".",markersize=10.0)
-plt.show()
+
+#uncomment below
+#plt.show()
 
 #result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.5,0.5,0,0,0.7,0.7]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
+result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.4,0.6,0.1,0.1,0.65,0.65]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
 #result=scipy.optimize.minimize(fun=costfunc,x0=np.array([0.3,0.52,0.5,-0.2,0.5,0.83]),method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
-#print(result)
-#B=result.hess_inv
-#print(B)
-#print(B.todense())
-#print(np.linalg.det(B.todense()))
-#print(np.linalg.matrix_rank(B.todense()))
-#print(np.linalg.eig(B.todense()))
-#B = B * np.identity(B.shape[1])
-#print(B)
+xtrue=np.array([0.5,0.5,0,0.1,0.7,0.6])
+ftrue=costfunc(xtrue) #for sanity that it evaluates to 0
+#print(ftrue)
+euclidstart=[]
+euclidend=[]
+euclidstartfun=[]
+euclidendfun=[]
+euclideig=[]
+eucliddet=[]
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx]
+
+for _ in range(1000):
+    xrand=np.array([np.random.uniform(0,1),np.random.uniform(0,1),np.random.uniform(-np.pi,np.pi),np.random.uniform(-np.pi,np.pi),np.random.uniform(0,1),np.random.uniform(0,1)])
+    euclidstart.append(np.linalg.norm(xrand-xtrue))
+    result=scipy.optimize.minimize(fun=costfunc,x0=xrand,method='L-BFGS-B',bounds=[(0,1),(0,1),(-np.pi,np.pi),(-np.pi,np.pi),(-np.inf,np.inf),(-np.inf,np.inf)])
+    euclidend.append(np.linalg.norm(result.x-xtrue))
+    euclidstartfun.append(costfunc(xrand))
+    euclidendfun.append(np.linalg.norm(result.fun-ftrue))
+    #print(xrand)
+    #print(result)
+    B=result.hess_inv
+    eucliddet.append(np.linalg.det(B.todense()))
+    values,vectors=np.linalg.eig(B.todense())
+    euclideig.append(find_nearest(values,0))
+    #print(B)
+    #print(B.todense())
+    #print(np.linalg.det(B.todense()))
+    #print(np.linalg.matrix_rank(B.todense()))
+    #print(np.linalg.eig(B.todense()))
+    #print("#################################################")
+    #B = B * np.identity(B.shape[1])
+    #print(B)
+
+#Euclidean distance plot, meh, need something cooler and more telling
+
+fig, ax = plt.subplots()
+x=range(1,1+len(euclidendfun))
+ax.scatter(x, euclidstart,label="Start Point")
+ax.scatter(x,euclidend,label="End Point")
+ax.set_xlabel("Trial Number")
+ax.set_ylabel("Euclidean Distance")
+plt.legend(loc="upper right")
+
+#for i, txt in enumerate(euclidfun): #for labelling end result likelihood
+#    ax.annotate(txt, (x[i], euclidend[i]))
+
+#histogram of start and end euclidean distances, show they don't shift really
+fig,ax=plt.subplots()
+HIST_BINS = np.linspace(0, 5, 10)
+#plt.hist(euclidstart,HIST_BINS,density=True,histtype='bar', fc='None',ec='blue')
+#plt.hist(euclidend,HIST_BINS,density=True,histtype='bar', fc='None',ec='orange')  
+
+
+euclidstart=np.array(euclidstart) #tune bandwidth to stop kde going for outliers and add labels to plots
+euclidend=np.array(euclidend)
+
+startave=np.sum(np.array(euclidstart))/len(euclidstart)
+finave=np.sum(np.array(euclidend))/len(euclidend)
+diff=startave-finave
+
+print(startave)
+print(finave)
+#print(diff)
+
+eval_points = np.linspace(np.min(euclidstart), np.max(euclidstart),len(euclidstart))
+kde=scipy.stats.gaussian_kde(euclidstart,bw_method="silverman")
+evaluated=kde.evaluate(eval_points)
+evaluated/=sum(evaluated) #For normalisation
+ax.plot(eval_points,evaluated, label="Start Point")
+ax.axvline(x=startave,c="blue")
+
+eval_points = np.linspace(np.min(euclidend), np.max(euclidend),len(euclidend))
+kde=scipy.stats.gaussian_kde(euclidend,bw_method="silverman")
+evaluated=kde.evaluate(eval_points)
+evaluated/=sum(evaluated) #For normalisation
+ax.plot(eval_points,evaluated,label="End Point")
+ax.axvline(x=finave,c="orange")
+
+ax.set_xlabel("Euclidean Distance")
+ax.set_ylabel("Normalised Probability")
+ax.set_xlim([0,20])
+plt.legend(loc="upper right")
+
+#histogram showing change in likelihoods from optimiser between start and end, meh, really need to know the average likelihood value
+#fig,ax=plt.subplots()
+#a=np.array(euclidstartfun)-np.array(euclidendfun)
+#plt.hist(a,density=True,histtype='bar', ec='black')
+
+fig,ax=plt.subplots()
+euclidstartfun=np.array(euclidstartfun)
+euclidendfun=np.array(euclidendfun)
+
+startfunave=np.sum(np.array(euclidstartfun))/len(euclidstartfun)
+finfunave=np.sum(np.array(euclidendfun))/len(euclidendfun)
+fundiff=startfunave-finfunave
+
+print(startfunave)
+print(finfunave)
+#print(fundiff)
+
+eval_points = np.linspace(np.min(euclidstartfun), np.max(euclidstartfun),len(euclidstartfun))
+kde=scipy.stats.gaussian_kde(euclidstartfun,bw_method="silverman")
+evaluated=kde.evaluate(eval_points)
+evaluated/=sum(evaluated) #For normalisation
+ax.plot(eval_points,evaluated,label="Start Point")
+ax.axvline(x=startfunave,c="blue")
+
+eval_points = np.linspace(np.min(euclidendfun), np.max(euclidendfun),len(euclidendfun))
+kde=scipy.stats.gaussian_kde(euclidendfun,bw_method="silverman")
+evaluated=kde.evaluate(eval_points)
+evaluated/=sum(evaluated) #For normalisation
+ax.plot(eval_points,evaluated, label="End Point")
+ax.axvline(x=finfunave,c="orange")
+
+ax.set_xlabel("Likelihood")
+ax.set_ylabel("Normalised Probability")
+plt.legend(loc="upper right")
+#eigenvalues of end convergence point, too scattered to make a meaningful histogram
+#fig,ax=plt.subplots()
+#HIST_BINS2=np.linspace(-.1,1.,5)
+#plt.hist(euclideig,HIST_BINS2,histtype='bar', ec='black')
+
+
+#scatter of hessian determinant
+fig, ax = plt.subplots()
+x=range(1,1+len(eucliddet))
+ax.scatter(x, eucliddet)
+
+ax.set_xlabel("Trial Number")
+ax.set_ylabel("Hessian Determinant")
+
+#scatter of hessian eigenvalue closest to zero
+fig, ax = plt.subplots()
+x=range(1,1+len(euclideig))
+ax.scatter(x, euclideig)
+ax.set_xlabel("Trial Number")
+ax.set_ylabel("Eigenvalue closest to zero")
+
+plt.show()
+
+"""
 
 #plotting_eta=np.linspace(0,1,100)
 #plotting_res=[]
@@ -163,7 +304,7 @@ plt.show()
 
 #plt.plot(plotting_eta,plotting_res)
 #plt.show()
-"""
+
 plotting_eta1=np.linspace(0,1,100)
 plotting_eta2=np.linspace(0,1,100)
 plotting_a1=np.linspace(-np.pi,np.pi,100)
@@ -196,7 +337,7 @@ for i in range(100):
         #a1,a2
         #x_test=np.array([0.5,0.5,plotting_a1[i],plotting_a2[j],0.7,0.6])
         #a1,b1
-        x_test=np.array([0.5,0.5,plotting_a1[i],0.1,plotting_b1[j],0.6])
+        #x_test=np.array([0.5,0.5,plotting_a1[i],0.1,plotting_b1[j],0.6])
         #a1,b2
         #x_test=np.array([0.5,0.5,plotting_a1[i],0.1,0.7,plotting_b2[j]])
         #a2,b1
@@ -204,9 +345,10 @@ for i in range(100):
         #a2,b2
         #x_test=np.array([0.5,0.5,0,plotting_a2[i],0.7,plotting_b2[j]])
         #b1,b2
-        #x_test=np.array([0.5,0.5,0,0.1,plotting_b1[i],plotting_b2[j]])
-        plotting_res[i][j]=costfunc(x_test)
-
+        x_test=np.array([0.5,0.5,0,0.1,plotting_b1[i],plotting_b2[j]])
+        #plotting_res[i][j]=costfunc(x_test)
+        plotting_res[j][i]=costfunc(x_test) #transposed because of coding conventions
+        
 #x, y = np.meshgrid(plotting_eta1, plotting_eta2)
 #x, y = np.meshgrid(plotting_eta1, plotting_a1)
 #x, y = np.meshgrid(plotting_eta1, plotting_a2)
@@ -217,11 +359,11 @@ for i in range(100):
 #x, y = np.meshgrid(plotting_eta2, plotting_b1)
 #x, y = np.meshgrid(plotting_eta2, plotting_b2)
 #x, y = np.meshgrid(plotting_a1, plotting_a2)
-x, y = np.meshgrid(plotting_a1, plotting_b1)
+#x, y = np.meshgrid(plotting_a1, plotting_b1)
 #x, y = np.meshgrid(plotting_a1, plotting_b2)
 #x, y = np.meshgrid(plotting_a2, plotting_b1)
 #x, y = np.meshgrid(plotting_a2, plotting_b2)
-#x, y = np.meshgrid(plotting_b1, plotting_b2)
+x, y = np.meshgrid(plotting_b1, plotting_b2)
 
 
 #region = np.s_[5:50, 5:50]
@@ -237,6 +379,10 @@ ls = LightSource(270, 45)
 rgb = ls.shade(z, cmap=cm.gist_earth, vert_exag=0.1, blend_mode='soft')
 surf = ax.plot_surface(x, y, z, rstride=1, cstride=1, facecolors=rgb,
                        linewidth=0, antialiased=False, shade=False)
+
+#ax.set_xlabel('X Label')
+#ax.set_ylabel('Y Label')
+#ax.set_zlabel('Z Label')
 
 plt.show()
 """

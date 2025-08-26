@@ -55,7 +55,7 @@ V_noisy = V + rng.normal(scale=0.05, size=(n_phaseshifters, N))  # extra noise o
 P_elect = a * V_noisy + b * (V_noisy ** 2) + c * (V_noisy ** 3)  # electrical power
 
 phi = C * P_elect - theta_0  # phase
-P_opt = A * np.cos(phi) + B  # optical power
+P_opt = A * np.cos(phi)**2 + B  # optical power
 
 with pm.Model() as model:  # model specifications in PyMC are wrapped in a with-statement
     # Define priors
@@ -68,7 +68,7 @@ with pm.Model() as model:  # model specifications in PyMC are wrapped in a with-
     theta_0 = pm.Normal("theta_0",0,sigma=.1)
 
     # Define likelihood
-    likelihood = pm.Normal("P_opt", mu=A*pm.math.cos(C * (a * V[0] + b * (V[0] ** 2) + c * (V[0] ** 3)) - theta_0) + B, sigma=.1, observed=P_opt)
+    likelihood = pm.Normal("P_opt", mu=A*pm.math.cos(C * (a * V[0] + b * (V[0] ** 2) + c * (V[0] ** 3)) - theta_0)**2 + B, sigma=.1, observed=P_opt)
 
     # Inference!
     # draw 3000 posterior samples using NUTS sampling

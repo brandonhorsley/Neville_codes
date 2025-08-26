@@ -34,10 +34,10 @@ a = 2E-4
 b = 2E-4
 c = 2E-4
 
-A = 0.5
-B = 0.5
+A = 1
+B = 0
 # C=200
-C = -200  # 200 and -200 give same result = locally identifiable
+C = 0  # 200 and -200 give same result = locally identifiable
 theta_0 = 0
 
 n_phaseshifters = 1
@@ -48,7 +48,7 @@ V_noisy = V + rng.normal(scale=0.05, size=(n_phaseshifters, N))  # extra noise o
 P_elect = a * V_noisy + b * (V_noisy ** 2) + c * (V_noisy ** 3)  # electrical power
 
 phi = C * P_elect - theta_0  # phase
-P_opt = A * np.cos(phi) + B  # optical power
+P_opt = A * np.cos(phi)**2 + B  # optical power
 
 
 def func(x, A, B, C, theta_0):
@@ -58,7 +58,7 @@ def cost(x):
     A,B,C,theta_0=x
     return np.mean((func(V[0],A,B,C, theta_0)-P_opt[0])**2)
 
-p0 = [0.5, 0.5, 190,0]  # initial guess
+p0 = [1.2, 0, 1,0]  # initial guess
 #res = scipy.optimize.minimize(cost, p0)
 minimizer_kwargs = { "method": "L-BFGS-B"}
 res=scipy.optimize.basinhopping(func=cost,x0=p0,minimizer_kwargs=minimizer_kwargs)

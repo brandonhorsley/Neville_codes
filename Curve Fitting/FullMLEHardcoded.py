@@ -30,7 +30,7 @@ V_global=np.zeros((n_MZI,))
 V_max=10 #changed from 10V due to nonlinearity problems
 
 A_res=np.zeros((n_MZI,)) 
-#B_res=np.zeros((n_MZI,))
+B_res=np.zeros((n_MZI,))
 C_res=np.zeros((n_MZI,))
 theta0_res=np.zeros((n_MZI,))
 V0_res=np.zeros((n_MZI,))
@@ -46,13 +46,13 @@ c_true+=.001+abs(rng.normal(scale=1E-3, size=(n_MZI,)))
 A_true=np.zeros((n_MZI,))
 A_true+=1+rng.normal(scale=.1, size=(n_MZI,))
 #print(A_true)
-#B_true=np.zeros((n_MZI,))
-#B_true+=0.5+rng.normal(scale=1, size=(n_MZI,))
+B_true=np.zeros((n_MZI,))
+B_true+=rng.normal(scale=.1, size=(n_MZI,))
 C_true=np.zeros((n_MZI,))
-C_true+=1+rng.normal(scale=.1, size=(n_MZI,))
+C_true+=1+rng.normal(scale=1, size=(n_MZI,))
 #print(C_true)
 theta0_true=np.zeros((n_MZI,))
-theta0_true+=rng.normal(scale=.01, size=(n_MZI,))
+theta0_true+=rng.normal(scale=.1, size=(n_MZI,))
 
 
 
@@ -71,7 +71,8 @@ V_noisy = V + rng.normal(scale=0.05, size=(N,))  # extra noise on voltage, value
 #plt.show()
 
 def idealMZI(phi): #assume both 50:50 beamsplitters
-    globalfactor=np.exp(1j*(phi/2 + np.pi/2))
+    #globalfactor=np.exp(1j*(phi/2 + np.pi/2))
+    globalfactor=1j
     matrix=np.array([[np.sin(phi/2),np.cos(phi/2)],[np.cos(phi/2),-np.sin(phi/2)]])
     return globalfactor*matrix
 
@@ -112,21 +113,21 @@ def curvefit(MZI_no,InputPort,OutputPort):
     #print(clickdata)
     import matplotlib.pyplot as plt
 
-    plt.plot(V,clickdata,'s')
-    plt.show()
+    #plt.plot(V,clickdata,'s')
+    #plt.show()
     
     #do MLE process and return key paramaters and voltage for complete transmission+complete reflection
-    def func(x,A,C,theta_0):
-        return A*np.cos(C*x - theta_0)**2
+    def func(x,A,B,C,theta_0):
+        return A*np.cos(C*x - theta_0)**2+B
 
     #Provide good initial guess or bump up allowed iterations
     #popt, pcov=curve_fit(func,Pow_noise[0],Popt_true[0])
     #plt.plot(Pow_true[0],Popt_true[0],linestyle='None',marker=".",markersize=10.0)
-    popt, pcov=curve_fit(f=func,xdata=V,ydata=clickdata,p0=[1,1,0])
+    popt, pcov=curve_fit(f=func,xdata=V,ydata=clickdata,p0=[1,0,1,0])
     A_max=popt[0]
-    #B_max=popt[1]
-    C_max=popt[1]
-    theta_0_max=popt[2]
+    B_max=popt[1]
+    C_max=popt[2]
+    theta_0_max=popt[3]
 
     #Transmission/reflection means just find point where minimum is or maximum is
     P_ref=(np.pi+theta_0_max)/C_max
@@ -141,67 +142,67 @@ def curvefit(MZI_no,InputPort,OutputPort):
     #print(filtered)
     V_trans=filtered[0] #hopefully there will only be one non complex number
 
-    return A_max,C_max,theta_0_max, V_trans,V_ref
+    return A_max,B_max,C_max,theta_0_max, V_trans,V_ref
 
 #Block of explicitly working through PIC chip
 #Main diagonal
 #MZI 1
-A_res[0],C_res[0],theta0_res[0],V0_res[0],Vpi_res[0]=curvefit(0,0,5)
+A_res[0],B_res[0],C_res[0],theta0_res[0],V0_res[0],Vpi_res[0]=curvefit(0,0,5)
 V_global[0]=V0_res[0]
 #MZI 5
-A_res[4],C_res[4],theta0_res[4],V0_res[4],Vpi_res[4]=curvefit(4,0,5)
+A_res[4],B_res[4],C_res[4],theta0_res[4],V0_res[4],Vpi_res[4]=curvefit(4,0,5)
 V_global[4]=V0_res[4]
 #MZI 13
-A_res[12],C_res[12],theta0_res[12],V0_res[12],Vpi_res[12]=curvefit(12,0,5)
+A_res[12],B_res[12],C_res[12],theta0_res[12],V0_res[12],Vpi_res[12]=curvefit(12,0,5)
 V_global[12]=V0_res[12]
 #MZI 9
-A_res[8],C_res[8],theta0_res[8],V0_res[8],Vpi_res[8]=curvefit(8,0,5)
+A_res[8],B_res[8],C_res[8],theta0_res[8],V0_res[8],Vpi_res[8]=curvefit(8,0,5)
 V_global[8]=V0_res[8]
 #MZI 3
-A_res[2],C_res[2],theta0_res[2],V0_res[2],Vpi_res[2]=curvefit(2,0,5)
+A_res[2],B_res[2],C_res[2],theta0_res[2],V0_res[2],Vpi_res[2]=curvefit(2,0,5)
 V_global[2]=V0_res[2]
 
 #First upper diagonal
 V_global[0]=Vpi_res[0]
 #MZI 6
-A_res[5],C_res[5],theta0_res[5],V0_res[5],Vpi_res[5]=curvefit(5,0,4)
+A_res[5],B_res[5],C_res[5],theta0_res[5],V0_res[5],Vpi_res[5]=curvefit(5,0,4)
 V_global[5]=V0_res[5]
 #MZI 14
-A_res[13],C_res[13],theta0_res[13],V0_res[13],Vpi_res[13]=curvefit(13,0,4)
+A_res[13],B_res[13],C_res[13],theta0_res[13],V0_res[13],Vpi_res[13]=curvefit(13,0,4)
 V_global[13]=V0_res[13]
 #MZI 8
-A_res[7],C_res[7],theta0_res[7],V0_res[7],Vpi_res[7]=curvefit(7,0,4)
+A_res[7],B_res[7],C_res[7],theta0_res[7],V0_res[7],Vpi_res[7]=curvefit(7,0,4)
 V_global[7]=V0_res[7]
 #MZI 2
-A_res[1],C_res[1],theta0_res[1],V0_res[1],Vpi_res[1]=curvefit(1,0,4)
+A_res[1],B_res[1],C_res[1],theta0_res[1],V0_res[1],Vpi_res[1]=curvefit(1,0,4)
 V_global[1]=V0_res[1]
 
 #Second upper diagonal
 V_global[5]=Vpi_res[5]
 #MZI 15
-A_res[14],C_res[14],theta0_res[14],V0_res[14],Vpi_res[14]=curvefit(14,0,2)
+A_res[14],B_res[14],C_res[14],theta0_res[14],V0_res[14],Vpi_res[14]=curvefit(14,0,2)
 V_global[14]=V0_res[14]
 #MZI 7
-A_res[6],C_res[6],theta0_res[6],V0_res[6],Vpi_res[6]=curvefit(6,0,2)
+A_res[6],B_res[6],C_res[6],theta0_res[6],V0_res[6],Vpi_res[6]=curvefit(6,0,2)
 V_global[6]=V0_res[6]
 
 #First lower diagonal
 V_global[2]=Vpi_res[2]
 #MZI 4
-A_res[3],C_res[3],theta0_res[3],V0_res[3],Vpi_res[3]=curvefit(3,2,5)
+A_res[3],B_res[3],C_res[3],theta0_res[3],V0_res[3],Vpi_res[3]=curvefit(3,2,5)
 V_global[3]=V0_res[3]
 #MZI 12
-A_res[11],C_res[11],theta0_res[11],V0_res[11],Vpi_res[11]=curvefit(11,2,5)
+A_res[11],B_res[11],C_res[11],theta0_res[11],V0_res[11],Vpi_res[11]=curvefit(11,2,5)
 V_global[11]=V0_res[11]
 #MZI 10
-A_res[9],C_res[9],theta0_res[9],V0_res[9],Vpi_res[9]=curvefit(9,2,5)
+A_res[9],B_res[9],C_res[9],theta0_res[9],V0_res[9],Vpi_res[9]=curvefit(9,2,5)
 V_global[9]=V0_res[9]
 
 #Second lower diagonal
 V_global[9]=Vpi_res[9]
 
 #MZI 11
-A_res[10],C_res[10],theta0_res[10],V0_res[10],Vpi_res[10]=curvefit(10,4,5)
+A_res[10],B_res[10],C_res[10],theta0_res[10],V0_res[10],Vpi_res[10]=curvefit(10,4,5)
 V_global[10]=V0_res[10]
 
 #Results
