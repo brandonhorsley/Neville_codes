@@ -12,7 +12,7 @@ import arviz as az
 import pymc as pm
 import scipy
 from scipy.optimize import curve_fit
-
+import time
 
 
 #Priming
@@ -54,6 +54,7 @@ C_true+=1+rng.normal(scale=1, size=(n_MZI,))
 theta0_true=np.zeros((n_MZI,))
 theta0_true+=rng.normal(scale=.1, size=(n_MZI,))
 
+MSE=np.zeros((n_MZI,))
 
 
 #order=[1,6,2,7,14,8,13,9,12,5,11,4,10,3,0] #order of MZIs to multiply to get final unitary
@@ -63,8 +64,8 @@ positions=[3,4,1,2,3,4,0,1,2,3,4,0,1,2,0] #waveguide each MZI is on
 
 
 V = np.random.uniform(low=0, high=V_max, size=(N,))  # without noise, value we believe we are setting
-#V = np.random.uniform(low=2, high=3, size=(N,))  # without noise, value we believe we are setting
-V_noisy = V + rng.normal(scale=0.05, size=(N,))  # extra noise on voltage, value actually set
+V_noisy=V
+#V_noisy = V + rng.normal(scale=0.05, size=(N,))  # extra noise on voltage, value actually set
 
 #import matplotlib.pyplot as plt
 
@@ -123,14 +124,41 @@ def curvefit(MZI_no,InputPort,OutputPort):
     def func(x,A,B,C,theta_0):
         return A*np.cos(C*x - theta_0)**2+B
 
+
+    def cost(x): #MSE
+        A,B,C,theta_0=x
+        return np.mean((func(V_noisy[0],A,B,C, theta_0)-P_opt)**2)
     #Provide good initial guess or bump up allowed iterations
     #popt, pcov=curve_fit(func,Pow_noise[0],Popt_true[0])
     #plt.plot(Pow_true[0],Popt_true[0],linestyle='None',marker=".",markersize=10.0)
-    popt, pcov=curve_fit(f=func,xdata=V,ydata=clickdata,p0=[1,0,1,0])
-    A_max=popt[0]
-    B_max=popt[1]
-    C_max=popt[2]
-    theta_0_max=popt[3]
+    
+    #popt, pcov=curve_fit(f=func,xdata=V,ydata=clickdata,p0=[1,0,1,0])
+    #A_max=popt[0]
+    #B_max=popt[1]
+    #C_max=popt[2]
+    #theta_0_max=popt[3]
+
+
+    P_elect = a_true[0] * V_noisy + b_true[0] * (V_noisy ** 2) + c_true[0] * (V_noisy ** 3)  # electrical power
+    phi = C_true[0] * P_elect - theta0_true[0]  # phase
+    P_opt = A_true[0] * np.cos(phi)**2 + B_true[0]  # optical power
+    Popt_true=P_opt
+    p0 = [1, 0, 0,0]  # initial guess
+    #res = scipy.optimize.minimize(cost, p0)
+    minimizer_kwargs = { "method": "L-BFGS-B"}
+    res=scipy.optimize.basinhopping(func=cost,x0=p0,minimizer_kwargs=minimizer_kwargs)
+    #print(res)
+    
+    A_max=res.x[0]
+    B_max=res.x[1]
+    C_max=res.x[2]
+    theta_0_max=res.x[3]
+
+    P_temp = a_true[0] * V_noisy + b_true[0] * (V_noisy ** 2) + c_true[0] * (V_noisy ** 3)  # electrical power
+    phi_temp = C_max * P_temp - theta_0_max  # phase
+    Popt_res = A_max * np.cos(phi_temp)**2 + B_max
+
+    MSE[MZI_no]=np.mean(Popt_res-Popt_true)**2
 
     #Transmission/reflection means just find point where minimum is or maximum is
     P_ref=(np.pi+theta_0_max)/C_max
@@ -145,8 +173,10 @@ def curvefit(MZI_no,InputPort,OutputPort):
     #print(filtered)
     V_trans=filtered[0] #hopefully there will only be one non complex number
 
-    return A_max,B_max,C_max,theta_0_max, V_trans,V_ref
-
+    #return A_max,B_max,C_max,theta_0_max, V_trans,V_ref
+    return A_max,B_max,C_max,theta_0_max, V_ref,V_trans
+    
+time_start=time.time()
 #Block of explicitly working through PIC chip
 #Main diagonal
 #MZI 1
@@ -208,8 +238,12 @@ V_global[9]=Vpi_res[9]
 A_res[10],B_res[10],C_res[10],theta0_res[10],V0_res[10],Vpi_res[10]=curvefit(10,4,5)
 V_global[10]=V0_res[10]
 
+time_end=time.time()
+
 #Results
 
+print("time taken")
+print(time_end-time_start)
 print("C comparison")
 print(C_res-C_true)
 
@@ -247,7 +281,7 @@ for i in range(N):
 Fid=[]
 for _ in range(len(MatArray_test_res)):
     #Fidelity
-    Fid.append((1/6)*np.absolute(np.trace(MatArray_test_res[_].conj().T@MatArray_test_true[_])))
+    Fid.append((1/m)*np.absolute(np.trace(MatArray_test_res[_].conj().T@MatArray_test_true[_])))
     #HS norm
     #Fid.append(np.linalg.norm(MatArray_test_true[_]-MatArray_test_res[_],ord=2))
     #Custom rotation metric
@@ -260,3 +294,12 @@ print(np.sum(Fid)/len(Fid))
 
 #print(MatArray_test_res[0])
 #print(MatArray_test_true[0])
+
+print("MSE comparison")
+print(MSE)
+print(sum(MSE))
+
+print("euclid dist")
+a=np.stack([C_true-C_res,theta0_true-theta0_res])
+eucliddist=np.linalg.norm(a,axis=0)
+print(eucliddist[0])
