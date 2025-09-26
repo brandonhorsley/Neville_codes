@@ -64,8 +64,8 @@ positions=[3,4,1,2,3,4,0,1,2,3,4,0,1,2,0] #waveguide each MZI is on
 
 
 V = np.random.uniform(low=0, high=V_max, size=(N,))  # without noise, value we believe we are setting
-#V_noisy=V
-V_noisy = V + rng.normal(scale=0.05, size=(N,))  # extra noise on voltage, value actually set
+V_noisy=V
+#V_noisy = V + rng.normal(scale=0.05, size=(N,))  # extra noise on voltage, value actually set
 
 #import matplotlib.pyplot as plt
 
@@ -119,40 +119,59 @@ def curvefit(MZI_no,InputPort,OutputPort):
 
     #plt.plot(V,clickdata,'s')
     #plt.show()
-    
-    #do MLE process and return key paramaters and voltage for complete transmission+complete reflection
-    def func(x,A,B,C,theta_0):
-        return A*np.cos(C*x - theta_0)**2+B
-
-
-    def cost(x): #MSE
-        A,B,C,theta_0=x
-        return np.mean((func(V_noisy[0],A,B,C, theta_0)-P_opt)**2)
-    #Provide good initial guess or bump up allowed iterations
-    #popt, pcov=curve_fit(func,Pow_noise[0],Popt_true[0])
-    #plt.plot(Pow_true[0],Popt_true[0],linestyle='None',marker=".",markersize=10.0)
-    
-    #popt, pcov=curve_fit(f=func,xdata=V,ydata=clickdata,p0=[1,0,1,0])
-    #A_max=popt[0]
-    #B_max=popt[1]
-    #C_max=popt[2]
-    #theta_0_max=popt[3]
-
 
     P_elect = a_true[0] * V_noisy + b_true[0] * (V_noisy ** 2) + c_true[0] * (V_noisy ** 3)  # electrical power
     phi = C_true[0] * P_elect - theta0_true[0]  # phase
     P_opt = A_true[0] * np.cos(phi)**2 + B_true[0]  # optical power
     Popt_true=P_opt
-    p0 = [1, 0, 0,0]  # initial guess
-    #res = scipy.optimize.minimize(cost, p0)
-    minimizer_kwargs = { "method": "L-BFGS-B"}
-    res=scipy.optimize.basinhopping(func=cost,x0=p0,minimizer_kwargs=minimizer_kwargs)
-    #print(res)
+
+    #do pymc process
+    with pm.Model() as model:  # model specifications in PyMC are wrapped in a with-statement
+        # Define priors
+        #a = pm.Normal("a", 2E-4,sigma=1)
+        #b = pm.Normal("b", 2E-4,sigma=1)
+        #c = pm.Normal("c", 2E-4,sigma=1)
+        A = pm.Normal("A", 1,sigma=.1)
+        B = pm.Normal("B", 0,sigma=.1)
+        C = pm.Normal("C", 1,sigma=.1)
+        theta_0 = pm.Normal("theta_0",0,sigma=.1)
+
+        # Define likelihood
+        #likelihood = pm.Normal("P_opt", mu=A*pm.math.cos(C * (a * V + b * (V ** 2) + c * (V ** 3)) - theta_0) + B, sigma=.1, observed=clickdata)
+        #I think model is using wrong voltage array, no accounting for all MZIs?
+        likelihood = pm.Normal("P_opt", mu=A*pm.math.cos(C * (a_true[MZI_no] * V + b_true[MZI_no] * (V ** 2) + c_true[MZI_no] * (V ** 3)) - theta_0)**2+B, sigma=.1, observed=clickdata)
+
+        # Inference!
+        # draw 3000 posterior samples using NUTS sampling
+        idata = pm.sample(3000,cores=1)
     
-    A_max=res.x[0]
-    B_max=res.x[1]
-    C_max=res.x[2]
-    theta_0_max=res.x[3]
+    az.plot_trace(idata)
+    plt.show()
+    #return parameters and voltage for complete transmission+complete reflection
+    table=az.summary(idata)
+    #print(table['mean']['A'])
+    #Take max likelihood value for each of the parameters
+    #A_max=print(idata.posterior['A'])
+    
+    #A_max=table['mean']['A']
+    #B_max=table['mean']['B']
+    #C_max=table['mean']['C']
+    #theta_0_max=table['mean']['theta_0']
+
+    #print(A_max)
+    #print(B_max)
+    #print(C_max)
+    #print(theta_0_max)
+    
+    A_max=scipy.stats.mode(idata.posterior['A'][0],axis=0).mode
+    B_max=scipy.stats.mode(idata.posterior['B'][0],axis=0).mode
+    C_max=scipy.stats.mode(idata.posterior['C'][0],axis=0).mode    
+    theta_0_max=scipy.stats.mode(idata.posterior['theta_0'][0],axis=0).mode
+    
+    #print(A_max)
+    #print(B_max)
+    #print(C_max)
+    #print(theta_0_max)
 
     P_temp = a_true[0] * V_noisy + b_true[0] * (V_noisy ** 2) + c_true[0] * (V_noisy ** 3)  # electrical power
     phi_temp = C_max * P_temp - theta_0_max  # phase
